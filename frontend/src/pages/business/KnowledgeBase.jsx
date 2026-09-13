@@ -87,10 +87,12 @@ function TestAssistant({ businessId }) {
 
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-      <h2 className="text-sm font-medium text-slate-200">Test your assistant</h2>
+      <h2 className="text-sm font-medium text-slate-200">Test knowledge base</h2>
       <p className="text-xs text-slate-500 mt-1">
-        Ask a question the way a customer would, and see what your assistant answers
-        from the knowledge base above.
+        Ask a question to preview raw answers from the knowledge base above. This
+        checks retrieval only — it won't detect issue reports or other assistant
+        behavior. For a full preview of your assistant, use the test box on the
+        Customize Assistant page instead.
       </p>
       <form onSubmit={handleAsk} className="mt-4 flex gap-2">
         <input
