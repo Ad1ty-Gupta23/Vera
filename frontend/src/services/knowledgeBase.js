@@ -50,3 +50,38 @@ export async function queryKnowledgeBase(businessId, question) {
   });
   return handle(res);
 }
+
+export async function listKnowledgeGaps(businessId) {
+  const res = await fetch(`${API_BASE}/businesses/${businessId}/knowledge-base/gaps`, {
+    credentials: 'include',
+  });
+  return handle(res);
+}
+
+export async function resolveKnowledgeGap(businessId, gapId, answer) {
+  const res = await fetch(
+    `${API_BASE}/businesses/${businessId}/knowledge-base/gaps/${gapId}/resolve`,
+    {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ answer }),
+    }
+  );
+  return handle(res);
+}
+
+export async function dismissKnowledgeGap(businessId, gapId) {
+  const res = await fetch(
+    `${API_BASE}/businesses/${businessId}/knowledge-base/gaps/${gapId}/dismiss`,
+    { method: 'POST', credentials: 'include' }
+  );
+  return handle(res);
+}
+
+export async function getKnowledgeInsights(businessId) {
+  const res = await fetch(`${API_BASE}/businesses/${businessId}/knowledge-base/insights`, {
+    credentials: 'include',
+  });
+  return handle(res);
+}

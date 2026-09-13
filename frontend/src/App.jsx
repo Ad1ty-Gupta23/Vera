@@ -17,6 +17,7 @@ import EmailIntegration from './pages/business/EmailIntegration';
 import BusinessSettings from './pages/business/BusinessSettings';
 import SubscriptionSettings from './pages/business/SubscriptionSettings';
 import WebsiteEmbed from './pages/business/WebsiteEmbed';
+import SupportDesk from './pages/business/SupportDesk';
 
 // The existing free chatbot (VERAProvider + Dashboard) is untouched — it's
 // just now mounted behind auth, at /dashboard, instead of being the only
@@ -80,6 +81,8 @@ function App() {
               <Route path="overview" element={<BusinessOverview />} />
               <Route path="knowledge-base" element={<KnowledgeBase />} />
               <Route path="conversations" element={<Conversations />} />
+              <Route path="actions" element={<SupportDesk />} />
+              <Route path="support" element={<Navigate to="../actions" replace />} />
               <Route path="email" element={<EmailIntegration />} />
               <Route path="customize" element={<CustomizeAssistant />} />
               <Route path="embed" element={<WebsiteEmbed />} />

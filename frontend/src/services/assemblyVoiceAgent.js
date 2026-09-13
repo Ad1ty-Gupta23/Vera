@@ -1,0 +1,400 @@
+/**
+ * Direct browser client for AssemblyAI's managed Voice Agent API.
+ *
+ * The backend mints a single-use token and supplies tenant-safe inline
+ * configuration. Audio goes straight to AssemblyAI at 24 kHz; JSON-schema
+ * tool calls return to VERA so existing RAG, incident, Gmail, and analytics
+ * behavior remains authoritative.
+ */
+
+const OUTPUT_SAMPLE_RATE = 24000;
+const TOOL_NAME = 'handle_customer_message';
+
+export class VoiceAgentUnavailableError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'VoiceAgentUnavailableError';
+    this.fallbackAllowed = true;
+  }
+}
+
+async function readResponse(res) {
+  let body = null;
+  try {
+    body = await res.json();
+  } catch {
+    body = null;
+  }
+  if (!res.ok) {
+    const message = body?.detail || `Managed voice request failed (${res.status})`;
+    throw new VoiceAgentUnavailableError(
+      typeof message === 'string' ? message : 'Managed voice is unavailable',
+    );
+  }
+  return body;
+}
+
+function arrayBufferToBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+
+function normalized(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+export function createAssemblyVoiceAgentSession(
+  onEvent,
+  { sessionUrl, toolUrl, sessionId, credentials = 'include' },
+) {
+  let ws = null;
+  let captureContext = null;
+  let playbackContext = null;
+  let workletNode = null;
+  let sourceNode = null;
+  let silentGain = null;
+  let stream = null;
+  let ready = false;
+  let stopped = false;
+  let playbackTime = 0;
+  let bootstrap = null;
+  let greetingPending = true;
+  let lastToolResult = null;
+  let lastTurnEvent = null;
+  let providerSessionId = null;
+  let interruptionCount = 0;
+  let callEndReported = false;
+  let suppressReplyAudio = false;
+  let latestUserTranscript = '';
+  const playbackSources = new Set();
+  const pendingTools = new Map();
+
+  function reportCallEnd() {
+    if (!providerSessionId || callEndReported) return;
+    callEndReported = true;
+    const endUrl = toolUrl.replace(/\/tool$/, '/calls/end');
+    fetch(endUrl, {
+      method: 'POST',
+      credentials,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        assemblyai_session_id: providerSessionId,
+        interruptions: interruptionCount,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  }
+
+  function stopPlayback() {
+    playbackSources.forEach((source) => {
+      try { source.stop(); } catch { /* source may already have ended */ }
+    });
+    playbackSources.clear();
+    playbackTime = playbackContext?.currentTime || 0;
+  }
+
+  function cleanupAudio() {
+    stopPlayback();
+    workletNode?.disconnect();
+    sourceNode?.disconnect();
+    silentGain?.disconnect();
+    stream?.getTracks().forEach((track) => track.stop());
+    if (captureContext && captureContext.state !== 'closed') captureContext.close().catch(() => {});
+    if (playbackContext && playbackContext.state !== 'closed') playbackContext.close().catch(() => {});
+    workletNode = null;
+    sourceNode = null;
+    silentGain = null;
+    stream = null;
+    captureContext = null;
+    playbackContext = null;
+  }
+
+  function cleanup({ endSession = false } = {}) {
+    stopped = true;
+    ready = false;
+    suppressReplyAudio = false;
+    pendingTools.clear();
+    cleanupAudio();
+    if (ws && ws.readyState === WebSocket.OPEN && endSession) {
+      try { ws.send(JSON.stringify({ type: 'session.end' })); } catch { /* closing */ }
+    }
+    if (endSession) reportCallEnd();
+    if (ws && ws.readyState < WebSocket.CLOSING) ws.close();
+    ws = null;
+  }
+
+  function playPcm16(base64) {
+    if (!playbackContext || stopped || suppressReplyAudio) return;
+    const raw = atob(base64);
+    const view = new DataView(new ArrayBuffer(raw.length));
+    for (let i = 0; i < raw.length; i += 1) view.setUint8(i, raw.charCodeAt(i));
+    const sampleCount = Math.floor(raw.length / 2);
+    const audioBuffer = playbackContext.createBuffer(1, sampleCount, OUTPUT_SAMPLE_RATE);
+    const channel = audioBuffer.getChannelData(0);
+    for (let i = 0; i < sampleCount; i += 1) channel[i] = view.getInt16(i * 2, true) / 32768;
+
+    const source = playbackContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(playbackContext.destination);
+    source.onended = () => playbackSources.delete(source);
+    playbackSources.add(source);
+    playbackTime = Math.max(playbackTime, playbackContext.currentTime);
+    source.start(playbackTime);
+    playbackTime += audioBuffer.duration;
+  }
+
+  async function callVeraTool(call) {
+    if (call.name !== TOOL_NAME) throw new Error(`Unsupported tool: ${call.name}`);
+    // Prefer the verbatim STT result. Tool arguments are generated by the
+    // voice model and may paraphrase away words such as "that" or "same"
+    // which VERA needs to connect a follow-up to persisted history.
+    const message = String(latestUserTranscript || call.arguments?.message || '').trim();
+    latestUserTranscript = '';
+    if (!message) throw new Error('The voice agent did not provide a customer message');
+
+    const res = await fetch(toolUrl, {
+      method: 'POST',
+      credentials,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionId,
+        message,
+        assemblyai_session_id: providerSessionId,
+      }),
+    });
+    const result = await readResponse(res);
+    lastToolResult = result;
+    if (result.incident) onEvent({ type: 'incident.update', incident: result.incident });
+    if (result.ticket) onEvent({ type: 'ticket.update', ticket: result.ticket });
+    if (result.order) onEvent({ type: 'order.update', order: result.order });
+    if (result.handoff) onEvent({ type: 'handoff.update', handoff: result.handoff });
+    return result;
+  }
+
+  function flushToolResultsIfIdle() {
+    if (lastTurnEvent !== 'reply.done' || !ws || ws.readyState !== WebSocket.OPEN) return;
+    pendingTools.forEach((pending, callId) => {
+      if (!pending.ready) return;
+      pendingTools.delete(callId);
+      const outcome = pending.outcome;
+      if (outcome.ok) {
+        ws.send(JSON.stringify({
+          type: 'tool.result',
+          call_id: callId,
+          result: JSON.stringify(outcome.result),
+          is_error: false,
+        }));
+      } else {
+        ws.send(JSON.stringify({
+          type: 'tool.result',
+          call_id: callId,
+          result: JSON.stringify({ error: outcome.error }),
+          is_error: true,
+        }));
+      }
+    });
+  }
+
+  function queueToolCall(message) {
+    const pending = { ready: false, outcome: null };
+    pendingTools.set(message.call_id, pending);
+    callVeraTool(message).then(
+      (result) => {
+        pending.ready = true;
+        pending.outcome = { ok: true, result };
+        flushToolResultsIfIdle();
+      },
+      (error) => {
+        pending.ready = true;
+        pending.outcome = { ok: false, error: error.message || 'Tool call failed' };
+        flushToolResultsIfIdle();
+      },
+    );
+  }
+
+  function handleMessage(message) {
+    switch (message.type) {
+      case 'session.ready':
+        ready = true;
+        suppressReplyAudio = false;
+        providerSessionId = message.session_id || null;
+        onEvent({ type: 'voice.session', sessionId: providerSessionId });
+        onEvent({ type: 'voice.mode', mode: 'assemblyai-managed' });
+        onEvent({ type: 'agent.status', status: 'listening' });
+        break;
+      case 'input.speech.started':
+        lastTurnEvent = message.type;
+        // Stop already-buffered reply audio immediately. Waiting only for the
+        // semantic reply.done(interrupted) signal can leave audible backlog.
+        // Keep suppressing late chunks from that reply until AssemblyAI starts
+        // the next response; otherwise those chunks recreate the backlog.
+        suppressReplyAudio = true;
+        stopPlayback();
+        onEvent({ type: 'agent.status', status: 'listening' });
+        break;
+      case 'input.speech.stopped':
+        onEvent({ type: 'agent.status', status: 'processing' });
+        break;
+      case 'transcript.user.delta':
+        onEvent({ type: 'transcript.partial', text: message.text || '' });
+        break;
+      case 'transcript.user':
+        latestUserTranscript = message.text || '';
+        onEvent({ type: 'transcript.final', text: message.text || '' });
+        break;
+      case 'reply.started':
+        lastTurnEvent = message.type;
+        suppressReplyAudio = false;
+        onEvent({ type: 'agent.status', status: 'processing' });
+        break;
+      case 'reply.audio':
+        playPcm16(message.data);
+        break;
+      case 'tool.call':
+        // Start the HTTP work now for low latency, but send tool.result only
+        // after the matching function-call reply.done, per AssemblyAI's API.
+        if (message.call_id) queueToolCall(message);
+        else onEvent({ type: 'error', message: 'Voice tool call was missing an ID.' });
+        break;
+      case 'transcript.agent': {
+        const isGreeting = greetingPending
+          && normalized(message.text) === normalized(bootstrap?.session?.greeting);
+        greetingPending = false;
+        // Every non-greeting turn is required to pass through VERA's tool.
+        // Only that result is authoritative UI text. AssemblyAI can emit an
+        // additional transcript around a tool-call reply boundary; rendering
+        // message.text as a fallback creates a ghost bubble that was not the
+        // final business response the customer heard.
+        if (!isGreeting && message.text && lastToolResult) {
+          onEvent({
+            type: 'agent.response',
+            // Keep the exact structured answer (including clickable URLs) in
+            // chat while AssemblyAI speaks the natural spoken_answer form.
+            text: lastToolResult.answer,
+            grounded: lastToolResult.grounded,
+            sources: lastToolResult.sources || [],
+            audioManaged: true,
+          });
+          lastToolResult = null;
+        }
+        if (message.interrupted) onEvent({ type: 'agent.interrupted' });
+        break;
+      }
+      case 'reply.done': {
+        lastTurnEvent = message.type;
+        if (message.status === 'interrupted') {
+          interruptionCount += 1;
+          suppressReplyAudio = true;
+          stopPlayback();
+          pendingTools.clear();
+          onEvent({ type: 'agent.interrupted' });
+          onEvent({ type: 'agent.status', status: 'listening' });
+        } else {
+          flushToolResultsIfIdle();
+          onEvent({ type: 'agent.status', status: 'listening' });
+        }
+        break;
+      }
+      case 'session.error':
+        onEvent({ type: 'error', message: message.message || 'Managed voice session error.' });
+        break;
+      default:
+        break;
+    }
+  }
+
+  async function startAudio() {
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+    });
+    captureContext = new AudioContext();
+    playbackContext = new AudioContext();
+    await Promise.all([captureContext.resume(), playbackContext.resume()]);
+    await captureContext.audioWorklet.addModule('/voiceAgentProcessor.js?v=barge-in-2');
+    sourceNode = captureContext.createMediaStreamSource(stream);
+    workletNode = new AudioWorkletNode(captureContext, 'voice-agent-processor', {
+      processorOptions: { targetSampleRate: OUTPUT_SAMPLE_RATE },
+    });
+    // A zero-gain connection keeps worklet processing alive without feeding
+    // microphone audio back through the speakers.
+    silentGain = captureContext.createGain();
+    silentGain.gain.value = 0;
+    sourceNode.connect(workletNode).connect(silentGain).connect(captureContext.destination);
+    workletNode.port.onmessage = (event) => {
+      if (ready && ws?.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'input.audio', audio: arrayBufferToBase64(event.data) }));
+      }
+    };
+  }
+
+  async function start() {
+    stopped = false;
+    try {
+      const res = await fetch(sessionUrl, { credentials, cache: 'no-store' });
+      bootstrap = await readResponse(res);
+      await startAudio();
+
+      const wsUrl = new URL(bootstrap.websocket_url);
+      wsUrl.searchParams.set('token', bootstrap.token);
+      ws = new WebSocket(wsUrl);
+
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const timeout = window.setTimeout(() => {
+          if (!settled) reject(new VoiceAgentUnavailableError('Managed voice timed out'));
+        }, 12000);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'session.update', session: bootstrap.session }));
+        };
+        ws.onmessage = (event) => {
+          let message;
+          try { message = JSON.parse(event.data); } catch { return; }
+          if (message.type === 'session.error' && !settled) {
+            settled = true;
+            window.clearTimeout(timeout);
+            reject(new VoiceAgentUnavailableError(message.message || 'Managed voice failed'));
+            return;
+          }
+          handleMessage(message);
+          if (message.type === 'session.ready' && !settled) {
+            settled = true;
+            window.clearTimeout(timeout);
+            resolve();
+          }
+        };
+        ws.onerror = () => {
+          if (!settled) {
+            settled = true;
+            window.clearTimeout(timeout);
+            reject(new VoiceAgentUnavailableError('Managed voice connection failed'));
+          } else if (!stopped) {
+            onEvent({ type: 'error', message: 'Managed voice connection error.' });
+          }
+        };
+        ws.onclose = () => {
+          if (!settled) {
+            settled = true;
+            window.clearTimeout(timeout);
+            reject(new VoiceAgentUnavailableError('Managed voice closed during setup'));
+          } else if (!stopped) {
+            onEvent({ type: 'error', message: 'Managed voice connection closed.' });
+            reportCallEnd();
+            cleanup();
+          }
+        };
+      });
+    } catch (error) {
+      cleanup();
+      throw error;
+    }
+  }
+
+  function stop() {
+    cleanup({ endSession: true });
+  }
+
+  return { start, stop, mode: 'assemblyai-managed' };
+}

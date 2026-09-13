@@ -3,6 +3,13 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     assemblyai_api_key: str = ""
+    # Optional sponsor-native runtime for business voice conversations. When
+    # disabled (or unavailable), the frontend keeps using VERA's established
+    # Universal Streaming STT + browser TTS path unchanged.
+    assemblyai_voice_agent_enabled: bool = True
+    assemblyai_voice_agent_voice: str = "alba"
+    assemblyai_voice_agent_token_ttl_seconds: int = 120
+    assemblyai_voice_agent_max_session_seconds: int = 900
     groq_api_key: str = ""
     google_places_api_key: str = ""
     # llama-3.3-70b-versatile was decommissioned by Groq on 08/16/26.

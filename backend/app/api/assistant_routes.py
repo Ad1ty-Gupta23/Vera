@@ -70,6 +70,9 @@ class TestMessageResponse(BaseModel):
     # Stage 6 — present whenever this turn was handled by the issue-report
     # workflow instead of the normal knowledge-base answer.
     incident: Optional[IncidentOut] = None
+    ticket: Optional[dict] = None
+    order: Optional[dict] = None
+    handoff: Optional[dict] = None
 
 
 # ------------------------------------------------------------------ routes --

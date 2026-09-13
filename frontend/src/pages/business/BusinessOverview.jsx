@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useBusiness } from '../../context/BusinessContext';
-import { listDocuments } from '../../services/knowledgeBase';
+import { getKnowledgeInsights, listDocuments } from '../../services/knowledgeBase';
 import { getAssistantConfig } from '../../services/assistant';
 import { listConversations } from '../../services/conversations';
 import { getGmailStatus } from '../../services/gmail';
 import { getEmbedConfig } from '../../services/embed';
+import { listTickets } from '../../services/support';
 
 function StatusCard({ label, value, tone = 'neutral', to }) {
   const toneClasses = {
@@ -39,6 +40,8 @@ export default function BusinessOverview() {
   const [conversations, setConversations] = useState(undefined);
   const [gmailStatus, setGmailStatus] = useState(undefined);
   const [embedConfig, setEmbedConfig] = useState(undefined);
+  const [insights, setInsights] = useState(undefined);
+  const [tickets, setTickets] = useState(undefined);
 
   useEffect(() => {
     if (!business?.id) return;
@@ -47,6 +50,8 @@ export default function BusinessOverview() {
     listConversations(business.id).then(setConversations).catch(() => setConversations(null));
     getGmailStatus().then(setGmailStatus).catch(() => setGmailStatus(null));
     getEmbedConfig(business.id).then(setEmbedConfig).catch(() => setEmbedConfig(null));
+    getKnowledgeInsights(business.id).then(setInsights).catch(() => setInsights(null));
+    listTickets(business.id).then(setTickets).catch(() => setTickets(null));
   }, [business?.id]);
 
   const readyCount = kbDocs?.filter((d) => d.status === 'ready').length ?? 0;
@@ -77,6 +82,7 @@ export default function BusinessOverview() {
   const embedStatus =
     embedConfig === undefined ? 'Loading…' : embedConfig?.embed_enabled ? 'Live on your site' : 'Not published';
   const embedTone = embedConfig?.embed_enabled ? 'good' : 'pending';
+  const activeTickets = tickets?.filter((ticket) => !['resolved', 'closed'].includes(ticket.status)).length;
 
   return (
     <div>
@@ -102,6 +108,55 @@ export default function BusinessOverview() {
         />
       </div>
 
+      <div className="mt-8">
+        <div className="flex items-end justify-between gap-4 mb-3">
+          <div>
+            <h2 className="text-sm font-medium text-slate-200">Support impact</h2>
+            <p className="text-xs text-slate-600 mt-0.5">
+              Live outcomes from customer conversations and verified answers.
+            </p>
+          </div>
+          <Link to="/business/knowledge-base" className="text-xs text-violet-400 hover:text-violet-300">
+            Improve answers →
+          </Link>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <StatusCard
+            label="Customer conversations"
+            value={insights === undefined ? 'Loading…' : insights?.conversation_count ?? 'Unavailable'}
+            tone="neutral"
+          />
+          <StatusCard
+            label="Grounded answer rate"
+            value={insights === undefined ? 'Loading…' : insights ? `${insights.grounded_rate}%` : 'Unavailable'}
+            tone={insights?.grounded_rate >= 80 ? 'good' : 'pending'}
+          />
+          <StatusCard
+            label="Open knowledge gaps"
+            value={
+              insights === undefined
+                ? 'Loading…'
+                : insights
+                ? `${insights.open_gaps} (${insights.unanswered_questions} asks)`
+                : 'Unavailable'
+            }
+            tone={insights?.open_gaps === 0 ? 'good' : 'pending'}
+            to="/business/knowledge-base"
+          />
+          <StatusCard
+            label="Action emails sent"
+            value={insights === undefined ? 'Loading…' : insights?.sent_incidents ?? 'Unavailable'}
+            tone={insights?.sent_incidents > 0 ? 'good' : 'neutral'}
+          />
+          <StatusCard
+            label="Active customer cases"
+            value={tickets === undefined ? 'Loading…' : activeTickets ?? 'Unavailable'}
+            tone={activeTickets > 0 ? 'pending' : 'good'}
+            to="/business/actions"
+          />
+        </div>
+      </div>
+
       <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
         <h2 className="text-sm font-medium text-slate-200">Business profile</h2>
         <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-sm">
@@ -122,7 +177,7 @@ export default function BusinessOverview() {
             <dd className="text-slate-200 mt-0.5">{business?.phone || '—'}</dd>
           </div>
           <div>
-            <dt className="text-slate-500 text-xs">Helpdesk email</dt>
+            <dt className="text-slate-500 text-xs">Action inbox email</dt>
             <dd className="text-slate-200 mt-0.5">{business?.helpdesk_email || '—'}</dd>
           </div>
           <div>

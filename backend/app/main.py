@@ -14,6 +14,8 @@ from app.api.gmail_routes import router as gmail_router
 from app.api.incident_routes import router as incident_router
 from app.api.embed_routes import router as embed_router
 from app.api.public_routes import router as public_router
+from app.api.voice_agent_routes import router as voice_agent_router
+from app.api.support_routes import router as support_router
 from app.config.settings import settings
 from app.db.session import init_db
 
@@ -110,3 +112,5 @@ app.include_router(gmail_router, prefix="/api")
 app.include_router(incident_router, prefix="/api")
 app.include_router(embed_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
+app.include_router(voice_agent_router, prefix="/api")
+app.include_router(support_router, prefix="/api")

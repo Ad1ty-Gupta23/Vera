@@ -40,7 +40,7 @@ export default function BusinessSettings() {
   const validate = () => {
     const errors = {};
     if (!form.name.trim()) errors.name = 'Business name is required.';
-    if (!form.helpdesk_email.trim()) errors.helpdesk_email = 'Helpdesk email is required.';
+    if (!form.helpdesk_email.trim()) errors.helpdesk_email = 'Action inbox email is required.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -115,14 +115,14 @@ export default function BusinessSettings() {
         <FormField label="Address" name="address" value={form.address} onChange={handleChange} />
 
         <FormField
-          label="Helpdesk email"
+          label="Action inbox email"
           name="helpdesk_email"
           type="email"
           value={form.helpdesk_email}
           onChange={handleChange}
           required
           error={fieldErrors.helpdesk_email}
-          hint="Customer issue reports will be emailed here once Gmail is connected."
+          hint="Optional confirmed customer-action emails are sent here once Gmail is connected."
         />
 
         <button

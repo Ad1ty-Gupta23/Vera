@@ -42,6 +42,7 @@ def init_db() -> None:
         conversation,
         gmail_connection,
         incident,
+        support,
     )
 
     Base.metadata.create_all(bind=engine)

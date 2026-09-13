@@ -14,7 +14,7 @@ from app.auth.security import _decode_session_token
 from app.config.settings import settings
 from app.db.session import SessionLocal
 from app.models.business import Business
-from app.services import business_chat
+from app.services import business_chat, voice_agent
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -366,7 +366,11 @@ async def _run_business_turn(
     await client_ws.send_json({"type": "agent.status", "status": "processing"})
     try:
         result = await business_chat.send_message(
-            db=db, business=business, session_id=f"{session_prefix}:{session_id}", message=text
+            db=db,
+            business=business,
+            session_id=f"{session_prefix}:{session_id}",
+            message=text,
+            channel="voice",
         )
     except Exception as exc:  # noqa: BLE001
         logger.error("[ws-business] chat failed business_id=%s: %s", business.id, exc)
@@ -380,11 +384,18 @@ async def _run_business_turn(
     await client_ws.send_json({
         "type": "agent.response",
         "text": result["answer"],
+        "spoken_text": voice_agent.make_spoken_answer(result["answer"]),
         "grounded": result["grounded"],
         "sources": result["sources"],
     })
     if result.get("incident"):
         await client_ws.send_json({"type": "incident.update", "incident": result["incident"]})
+    if result.get("ticket"):
+        await client_ws.send_json({"type": "ticket.update", "ticket": result["ticket"]})
+    if result.get("order"):
+        await client_ws.send_json({"type": "order.update", "order": result["order"]})
+    if result.get("handoff"):
+        await client_ws.send_json({"type": "handoff.update", "handoff": result["handoff"]})
     await client_ws.send_json({"type": "agent.status", "status": "idle"})
 
 

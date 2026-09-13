@@ -24,6 +24,7 @@ function ConfirmationScreen() {
     { label: 'Open assistant overview', to: '/business/overview', ready: true },
     { label: 'Manage knowledge base', to: '/business/knowledge-base', ready: true },
     { label: 'Customize assistant', to: '/business/customize', ready: true },
+    { label: 'Configure voice actions', to: '/business/actions', ready: true },
     { label: 'Connect Gmail', to: '/business/email', ready: true },
     { label: 'Get embed code', to: '/business/embed', ready: true },
   ];
@@ -99,7 +100,7 @@ export default function BusinessOnboarding() {
     const errors = {};
     if (!form.name.trim()) errors.name = 'Business name is required.';
     if (!form.helpdesk_email.trim()) {
-      errors.helpdesk_email = 'A helpdesk email is required — this is where customer issues get sent.';
+      errors.helpdesk_email = 'An action inbox email is required for optional customer follow-up.';
     }
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
@@ -205,15 +206,15 @@ export default function BusinessOnboarding() {
           />
 
           <FormField
-            label="Helpdesk email"
+            label="Action inbox email"
             name="helpdesk_email"
             type="email"
             value={form.helpdesk_email}
             onChange={handleChange}
             required
             error={fieldErrors.helpdesk_email}
-            hint="Customer issue reports will be emailed here once Gmail is connected."
-            placeholder="support@example.com"
+            hint="Optional confirmed email follow-ups will be sent here once Gmail is connected."
+            placeholder="actions@example.com"
           />
 
           <button

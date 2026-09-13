@@ -1,5 +1,5 @@
 """
-Stage 6 — the customer issue-report workflow described in the brief's
+Stage 6 — the customer action-request workflow described in the brief's
 section 12 ("Customer Issue Workflow"): recognize the intent, collect only
 what's still missing, draft an email, and stop — never send without an
 explicit, separate confirm step (see api/incident_routes.py).
@@ -10,8 +10,8 @@ must never blend). business_chat.send_message calls maybe_handle_turn()
 first; if it returns handled=True, the normal RAG path is skipped for
 that turn entirely.
 
-Field collection uses one LLM call per turn to (a) detect report-an-issue
-intent when no incident is open yet, and (b) pull any of the required
+Field collection uses one LLM call per turn to (a) detect an actionable
+customer request when no case is open yet, and (b) pull any of the required
 fields out of free text. Which field to ask next, and the final email
 draft, are both decided deterministically in Python — not by the model —
 so behavior stays predictable and nothing is invented (the email draft is
@@ -22,6 +22,7 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import re
 from typing import Optional
 
 from groq import APIError, APITimeoutError
@@ -35,6 +36,44 @@ from app.services.groq import get_client
 
 logger = logging.getLogger(__name__)
 
+# The LLM extracts fields only after a deterministic intent gate. Without
+# this guard, a permissive classifier can turn ordinary FAQ questions into
+# an action form. Patterns deliberately require an action/problem signal;
+# nouns alone ("appointment policy", "return window") remain normal Q&A.
+_ACTION_REQUEST_PATTERNS = tuple(
+    re.compile(pattern, re.IGNORECASE)
+    for pattern in (
+        r"\b(report|file|raise|open)\b.{0,30}\b(issue|problem|complaint|case)\b",
+        r"\b(damaged|broken|defective|not working|stopped working|charged twice|billing error)\b",
+        r"\b(book|schedule|reschedule|cancel|change|move|make)\b.{0,35}\b(appointment|reservation|booking|consultation|viewing)\b",
+        r"\b(request|need|want|get|send)\b.{0,25}\b(quote|estimate|demo|callback|call back|refund|return|replacement|exchange)\b",
+        r"\b(call|contact|email|reach|follow up with)\s+(me|us)\b",
+        r"\b(speak|talk)\s+(to|with)\b.{0,25}\b(human|person|agent|staff|team|representative)\b",
+        r"\b(interested in|apply for|application for)\b",
+        r"\b(i need help|i need support|please help me)\b.{0,80}\b(with|because|about)\b",
+    )
+)
+
+_INFORMATIONAL_PREFIX = re.compile(
+    r"^(what|when|where|why|how|do you|does|is there|are there|can you tell|could you tell)\b",
+    re.IGNORECASE,
+)
+_PERSONAL_ACTION_SIGNAL = re.compile(
+    r"\b(for me|for us|i (?:need|want|would like)|we (?:need|want|would like)|please)\b",
+    re.IGNORECASE,
+)
+
+
+def looks_like_action_request(message: str) -> bool:
+    """Return True only for an explicit request that needs business action."""
+    text = " ".join((message or "").split())
+    # "How do I book?" and "Do you offer appointments?" ask for
+    # information. A personal signal such as "please book for me" opts into
+    # the action flow even when phrased as a question.
+    if _INFORMATIONAL_PREFIX.search(text) and not _PERSONAL_ACTION_SIGNAL.search(text):
+        return False
+    return any(pattern.search(text) for pattern in _ACTION_REQUEST_PATTERNS)
+
 # Asked in this order. name + issue_description are required before a
 # draft can be produced at all; email + order_reference are asked once
 # each but are skippable ("I don't have one" / "skip" -> stored as "" to
@@ -46,14 +85,14 @@ SKIPPABLE_FIELDS = ["customer_email", "order_reference"]
 ASK_ORDER = REQUIRED_FIELDS + SKIPPABLE_FIELDS
 
 FIELD_QUESTIONS = {
-    "customer_name": "Sure, I can help you report this. Could I get your name?",
-    "issue_description": "Thanks — could you describe the problem?",
-    "customer_email": "Got it. What's the best email to reach you at, if you'd like to share one? (You can say \"skip\" if you'd rather not.)",
-    "order_reference": "And do you have an order or reference number for this? (Optional — say \"skip\" if not.)",
+    "customer_name": "Sure, I can help with that request. Could I get your name?",
+    "issue_description": "Thanks — what do you need, and what outcome would you like?",
+    "customer_email": "Would you like to leave an email for follow-up? It's optional, so you can say \"skip\".",
+    "order_reference": "Do you have a booking, account, order, or other reference number? (Optional — say \"skip\" if not.)",
 }
 
-_EXTRACTION_SYSTEM_PROMPT = """You help a customer-support chatbot for "{business_name}" understand \
-when a customer wants to report a problem, and pull structured details out of what they say.
+_EXTRACTION_SYSTEM_PROMPT = """You help a business voice assistant for "{business_name}" understand \
+when a customer wants the business to take an action, and pull structured details out of what they say.
 
 Respond with ONLY a JSON object (no markdown fences), matching exactly this shape:
 {{
@@ -71,13 +110,15 @@ declined to provide, e.g. said "skip" or "I don't have one" or "no email"]
 }}
 
 Rules:
-- "is_issue_report" is true if the customer is reporting a problem, requesting support, filing a \
-complaint, or asking to contact/reach the business about an issue with their order or service.
+- "is_issue_report" is true when the customer wants a trackable business action: reporting a \
+problem, requesting support or a callback, booking or changing an appointment/reservation, asking \
+for a quote/demo/consultation, expressing interest as a sales lead, requesting a return/refund, or \
+asking staff to follow up. It is false for ordinary factual questions that can be answered directly.
 - Only put a value in "extracted" if it was stated in the CUSTOMER'S LATEST MESSAGE (not earlier \
 turns — those are already recorded). Leave anything not mentioned as null.
 - Never invent a name, email, phone, order number, or description that wasn't actually said.
-- "issue_description" should be a concise restatement of the problem in the customer's own terms, \
-not a guess at the cause.
+- "issue_description" should be a concise restatement of the requested action or problem in the \
+customer's own terms, not a guess at missing details or the cause.
 - If the customer's latest message is just answering "what's your name" with a bare name, put it in \
 customer_name even without a full sentence.
 """
@@ -146,9 +187,9 @@ def _next_missing_field(incident: Incident) -> Optional[str]:
 def _build_draft(business: Business, incident: Incident) -> tuple[str, str]:
     """Deterministic template — never an LLM call — so the email can never
     contain an invented policy, price, or contact detail (brief section 10/12)."""
-    subject = f"Customer Support Request — {business.name or 'Business'}"
+    subject = f"Customer Action Request — {business.name or 'Business'}"
     if incident.order_reference:
-        subject += f" (Order {incident.order_reference})"
+        subject += f" (Reference {incident.order_reference})"
 
     lines = [
         f"Customer name: {incident.customer_name or 'Not provided'}",
@@ -158,9 +199,9 @@ def _build_draft(business: Business, incident: Incident) -> tuple[str, str]:
     if incident.customer_phone:
         lines.append(f"Customer phone: {incident.customer_phone}")
     if incident.order_reference:
-        lines.append(f"Order/reference number: {incident.order_reference}")
+        lines.append(f"Reference number: {incident.order_reference}")
     lines.append("")
-    lines.append("Issue description:")
+    lines.append("Customer request:")
     lines.append(incident.issue_description or "Not provided")
     if incident.additional_details:
         lines.append("")
@@ -208,6 +249,8 @@ def maybe_handle_turn(
     incident = _get_open_incident(db, conversation.id)
 
     if incident is None:
+        if not looks_like_action_request(message):
+            return None
         try:
             result = _call_extraction(business, message, history)
         except (APIError, APITimeoutError, json.JSONDecodeError, ValueError) as exc:
@@ -255,7 +298,8 @@ def maybe_handle_turn(
     db.refresh(incident)
 
     answer = (
-        "Here's a summary of your issue. I've drafted an email to our support team — "
-        "please review it below. You can edit it, then confirm to send, or cancel."
+        "I've prepared your request for review. Say \"create the case\" or use the "
+        "Create case button to add it to the Action Center. Email is optional and will appear only "
+        "if you choose it."
     )
     return {"answer": answer, "incident": _incident_out(incident)}

@@ -1,3 +1,4 @@
+import datetime
 import logging
 from typing import List, Optional
 
@@ -10,8 +11,9 @@ from app.config.settings import settings
 from app.db.session import get_db
 from app.knowledge.extraction import SUPPORTED_EXTENSIONS
 from app.models.business import Business
-from app.models.knowledge import KnowledgeDocument
+from app.models.knowledge import KnowledgeDocument, KnowledgeGap
 from app.services import knowledge_base as kb_service
+from app.services import knowledge_gaps as gap_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/businesses/{business_id}/knowledge-base", tags=["knowledge-base"])
@@ -57,6 +59,35 @@ class QueryResponse(BaseModel):
     sources: List[str]
 
 
+class KnowledgeGapOut(BaseModel):
+    id: int
+    question: str
+    occurrence_count: int
+    status: str
+    approved_answer: Optional[str] = None
+    source_document_id: Optional[int] = None
+    first_seen_at: datetime.datetime
+    last_seen_at: datetime.datetime
+    resolved_at: Optional[datetime.datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class ResolveGapRequest(BaseModel):
+    answer: str = Field(min_length=1, max_length=4000)
+
+
+class KnowledgeInsightsOut(BaseModel):
+    conversation_count: int
+    total_answers: int
+    grounded_answers: int
+    grounded_rate: int
+    open_gaps: int
+    unanswered_questions: int
+    resolved_gaps: int
+    sent_incidents: int
+
+
 # ------------------------------------------------------- document lookup --
 
 def get_owned_document(
@@ -75,6 +106,21 @@ def get_owned_document(
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     return document
+
+
+def get_owned_gap(
+    gap_id: int,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+) -> KnowledgeGap:
+    gap = (
+        db.query(KnowledgeGap)
+        .filter(KnowledgeGap.id == gap_id, KnowledgeGap.business_id == business.id)
+        .first()
+    )
+    if gap is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge gap not found")
+    return gap
 
 
 # ------------------------------------------------------------------ routes --
@@ -126,6 +172,58 @@ def list_documents(
         .all()
     )
     return [KnowledgeDocumentOut.from_orm_row(r) for r in rows]
+
+
+@router.get("/gaps", response_model=List[KnowledgeGapOut])
+def list_knowledge_gaps(
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    return (
+        db.query(KnowledgeGap)
+        .filter(
+            KnowledgeGap.business_id == business.id,
+            KnowledgeGap.status == KnowledgeGap.STATUS_OPEN,
+        )
+        .order_by(KnowledgeGap.occurrence_count.desc(), KnowledgeGap.last_seen_at.desc())
+        .all()
+    )
+
+
+@router.post("/gaps/{gap_id}/resolve", response_model=KnowledgeGapOut)
+def resolve_knowledge_gap(
+    body: ResolveGapRequest,
+    gap: KnowledgeGap = Depends(get_owned_gap),
+    db: Session = Depends(get_db),
+):
+    if gap.status != KnowledgeGap.STATUS_OPEN:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Knowledge gap is not open")
+    try:
+        return gap_service.resolve_gap(db, gap, body.answer)
+    except ValueError as exc:
+        logger.error("[knowledge] failed to resolve gap_id=%s: %s", gap.id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="The answer could not be added to the knowledge base.",
+        ) from exc
+
+
+@router.post("/gaps/{gap_id}/dismiss", response_model=KnowledgeGapOut)
+def dismiss_knowledge_gap(
+    gap: KnowledgeGap = Depends(get_owned_gap),
+    db: Session = Depends(get_db),
+):
+    if gap.status != KnowledgeGap.STATUS_OPEN:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Knowledge gap is not open")
+    return gap_service.dismiss_gap(db, gap)
+
+
+@router.get("/insights", response_model=KnowledgeInsightsOut)
+def get_knowledge_insights(
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    return gap_service.summary(db, business.id)
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

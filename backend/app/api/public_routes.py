@@ -19,11 +19,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.incident_routes import _confirm_and_send_incident
+from app.api.support_routes import OrderOut, TicketCreateRequest, TicketOut
 from app.db.session import get_db
 from app.models.assistant import AssistantConfig
 from app.models.business import Business
 from app.models.incident import Incident
-from app.services import business_chat
+from app.services import business_chat, support_desk
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/public", tags=["public-embed"])
@@ -41,7 +42,13 @@ def get_widget_script():
     file with a different `data-assistant-id`; the file only ever talks
     to the routes below, which is where all the tenant scoping lives.
     """
-    return FileResponse(_WIDGET_JS_PATH, media_type="application/javascript")
+    # Revalidate the fixed widget URL so embedded sites receive voice fixes
+    # without requiring the business to replace its snippet.
+    return FileResponse(
+        _WIDGET_JS_PATH,
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache"},
+    )
 
 
 # ---------------------------------------------------------------- schemas --
@@ -87,6 +94,9 @@ class PublicMessageResponse(BaseModel):
     grounded: bool
     sources: List[str]
     incident: Optional[PublicIncidentOut] = None
+    ticket: Optional[TicketOut] = None
+    order: Optional[OrderOut] = None
+    handoff: Optional[dict] = None
 
 
 class IncidentDraftUpdate(BaseModel):
@@ -203,7 +213,10 @@ def update_public_incident(
     incident: Incident = Depends(_get_public_incident),
     db: Session = Depends(get_db),
 ):
-    if incident.status != Incident.STATUS_READY_FOR_REVIEW:
+    if incident.status not in (
+        Incident.STATUS_READY_FOR_REVIEW,
+        Incident.STATUS_TICKET_CREATED,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="This draft isn't ready for review yet."
         )
@@ -228,12 +241,41 @@ async def confirm_public_incident(
     return updated
 
 
+@router.post(
+    "/assistants/{public_id}/incidents/{incident_id}/ticket",
+    response_model=TicketOut,
+)
+def create_public_ticket(
+    body: TicketCreateRequest,
+    incident: Incident = Depends(_get_public_incident),
+    ctx: tuple = Depends(get_public_business),
+    db: Session = Depends(get_db),
+):
+    _config, business = ctx
+    try:
+        ticket = support_desk.create_ticket_from_incident(
+            db,
+            business,
+            incident,
+            channel=body.channel,
+            assemblyai_session_id=body.assemblyai_session_id,
+            actor="customer",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return support_desk.ticket_out(ticket)
+
+
 @router.post("/assistants/{public_id}/incidents/{incident_id}/cancel", response_model=IncidentActionOut)
 def cancel_public_incident(
     incident: Incident = Depends(_get_public_incident),
     db: Session = Depends(get_db),
 ):
-    if incident.status not in (Incident.STATUS_COLLECTING, Incident.STATUS_READY_FOR_REVIEW):
+    if incident.status not in (
+        Incident.STATUS_COLLECTING,
+        Incident.STATUS_READY_FOR_REVIEW,
+        Incident.STATUS_TICKET_CREATED,
+    ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nothing to cancel.")
     incident.status = Incident.STATUS_CANCELLED
     db.add(incident)

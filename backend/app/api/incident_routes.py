@@ -65,7 +65,10 @@ def update_draft(
     incident: Incident = Depends(_get_owned_incident),
     db: Session = Depends(get_db),
 ):
-    if incident.status != Incident.STATUS_READY_FOR_REVIEW:
+    if incident.status not in (
+        Incident.STATUS_READY_FOR_REVIEW,
+        Incident.STATUS_TICKET_CREATED,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This draft isn't ready for review yet.",
@@ -99,7 +102,10 @@ async def _confirm_and_send_incident(db: Session, incident: Incident, business: 
     the business owner testing their assistant or by an anonymous
     customer on the embedded widget.
     """
-    if incident.status != Incident.STATUS_READY_FOR_REVIEW:
+    if incident.status not in (
+        Incident.STATUS_READY_FOR_REVIEW,
+        Incident.STATUS_TICKET_CREATED,
+    ):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="This draft has already been sent or cancelled.",
@@ -146,7 +152,11 @@ def cancel(
     incident: Incident = Depends(_get_owned_incident),
     db: Session = Depends(get_db),
 ):
-    if incident.status not in (Incident.STATUS_COLLECTING, Incident.STATUS_READY_FOR_REVIEW):
+    if incident.status not in (
+        Incident.STATUS_COLLECTING,
+        Incident.STATUS_READY_FOR_REVIEW,
+        Incident.STATUS_TICKET_CREATED,
+    ):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Nothing to cancel.")
     incident.status = Incident.STATUS_CANCELLED
     db.add(incident)

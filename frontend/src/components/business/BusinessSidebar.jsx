@@ -4,6 +4,7 @@ const NAV_ITEMS = [
   { to: '/business/overview', label: 'Overview' },
   { to: '/business/knowledge-base', label: 'Knowledge Base' },
   { to: '/business/conversations', label: 'Conversations' },
+  { to: '/business/actions', label: 'Action Center' },
   { to: '/business/email', label: 'Email Integration' },
   { to: '/business/customize', label: 'Customize Assistant' },
   { to: '/business/embed', label: 'Website Embed' },

@@ -21,7 +21,7 @@ from app.knowledge.chunking import chunk_text
 from app.knowledge.extraction import ExtractionError, extract_text
 from app.knowledge.prompts import KNOWLEDGE_BASE_ANSWER_PROMPT
 from app.models.business import Business
-from app.models.knowledge import KnowledgeDocument
+from app.models.knowledge import KnowledgeDocument, KnowledgeGap
 from app.services.groq import get_client
 
 logger = logging.getLogger(__name__)
@@ -112,6 +112,7 @@ def delete_all_for_business(db: Session, business_id: int) -> None:
     need an explicit delete, or they'd linger as orphaned, unreachable data.
     """
     vector_store.delete_business_chunks(business_id)
+    db.query(KnowledgeGap).filter(KnowledgeGap.business_id == business_id).delete()
     db.query(KnowledgeDocument).filter(KnowledgeDocument.business_id == business_id).delete()
     db.commit()
 

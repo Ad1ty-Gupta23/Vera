@@ -27,6 +27,7 @@ class Incident(Base):
     # ------------------------------------------------------------- status --
     STATUS_COLLECTING = "collecting"
     STATUS_READY_FOR_REVIEW = "ready_for_review"
+    STATUS_TICKET_CREATED = "ticket_created"
     STATUS_SENT = "sent"
     STATUS_CANCELLED = "cancelled"
     STATUS_FAILED = "failed"
@@ -35,7 +36,8 @@ class Incident(Base):
     business_id = Column(Integer, ForeignKey("businesses.id"), nullable=False, index=True)
     conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False, index=True)
 
-    # "collecting" | "ready_for_review" | "sent" | "cancelled" | "failed"
+    # "collecting" | "ready_for_review" | "ticket_created" | "sent" |
+    # "cancelled" | "failed"
     status = Column(String, nullable=False, default=STATUS_COLLECTING)
 
     # --- collected fields (all nullable — filled in as the customer answers) --

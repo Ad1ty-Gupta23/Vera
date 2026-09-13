@@ -9,6 +9,9 @@ import {
   uploadDocument,
   deleteDocument,
   queryKnowledgeBase,
+  listKnowledgeGaps,
+  resolveKnowledgeGap,
+  dismissKnowledgeGap,
 } from '../../services/knowledgeBase';
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx'];
@@ -128,6 +131,126 @@ function TestAssistant({ businessId }) {
         </div>
       )}
     </div>
+  );
+}
+
+function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
+  const toast = useToast();
+  const [gaps, setGaps] = useState(undefined);
+  const [answers, setAnswers] = useState({});
+  const [busyId, setBusyId] = useState(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      setGaps(await listKnowledgeGaps(businessId));
+    } catch (err) {
+      toast.error(err.message || 'Could not load knowledge gaps.');
+      setGaps([]);
+    }
+  }, [businessId, toast]);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleResolve = async (gap) => {
+    const answer = (answers[gap.id] || '').trim();
+    if (!answer) return;
+    setBusyId(gap.id);
+    try {
+      await resolveKnowledgeGap(businessId, gap.id, answer);
+      setAnswers((current) => ({ ...current, [gap.id]: '' }));
+      toast.success('Answer approved and added to the knowledge base.');
+      await Promise.all([refresh(), onKnowledgeChanged?.()]);
+    } catch (err) {
+      toast.error(err.message || 'Could not approve this answer.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handleDismiss = async (gapId) => {
+    setBusyId(gapId);
+    try {
+      await dismissKnowledgeGap(businessId, gapId);
+      setGaps((current) => (current || []).filter((gap) => gap.id !== gapId));
+      toast.info('Knowledge gap dismissed.');
+    } catch (err) {
+      toast.error(err.message || 'Could not dismiss this question.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <section className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-sm font-medium text-slate-100">Knowledge gaps</h2>
+          <p className="text-xs text-slate-500 mt-1 max-w-xl">
+            Questions the assistant refused to guess. Approve an answer once and it becomes
+            searchable business knowledge for future customers.
+          </p>
+        </div>
+        {gaps?.length > 0 && (
+          <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+            {gaps.length} open
+          </span>
+        )}
+      </div>
+
+      {gaps === undefined ? (
+        <div className="flex justify-center py-8">
+          <LoadingIndicator label="Finding unanswered questions..." />
+        </div>
+      ) : gaps.length === 0 ? (
+        <div className="mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center">
+          <p className="text-sm text-emerald-400">No open knowledge gaps</p>
+          <p className="text-xs text-slate-600 mt-1">
+            Unknown customer questions will automatically appear here.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-4 space-y-3">
+          {gaps.map((gap) => (
+            <div key={gap.id} className="rounded-lg border border-slate-800 bg-slate-950/70 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-sm font-medium text-slate-200">{gap.question}</p>
+                <span className="shrink-0 text-[11px] text-amber-300 bg-amber-500/10 rounded-full px-2 py-0.5">
+                  Asked {gap.occurrence_count} {gap.occurrence_count === 1 ? 'time' : 'times'}
+                </span>
+              </div>
+              <textarea
+                value={answers[gap.id] || ''}
+                onChange={(event) =>
+                  setAnswers((current) => ({ ...current, [gap.id]: event.target.value }))
+                }
+                rows={3}
+                maxLength={4000}
+                placeholder="Enter the verified answer customers should receive..."
+                className="mt-3 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500/60 resize-none"
+              />
+              <div className="mt-2 flex gap-2">
+                <button
+                  onClick={() => handleResolve(gap)}
+                  disabled={busyId === gap.id || !(answers[gap.id] || '').trim()}
+                  className="rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-40"
+                >
+                  {busyId === gap.id ? 'Saving...' : 'Approve & teach VERA'}
+                </button>
+                <button
+                  onClick={() => handleDismiss(gap.id)}
+                  disabled={busyId === gap.id}
+                  className="rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-400 hover:bg-slate-800 disabled:opacity-40"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -299,6 +422,12 @@ export default function KnowledgeBase() {
           </div>
         )}
       </div>
+
+      {businessId && (
+        <div className="mt-6">
+          <KnowledgeGaps businessId={businessId} onKnowledgeChanged={refresh} />
+        </div>
+      )}
 
       {documents && documents.some((d) => d.status === 'ready') && businessId && (
         <div className="mt-6">
