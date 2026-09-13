@@ -149,7 +149,11 @@ def _get_public_incident(
     # Requiring the caller to know the conversation's own session_id (not
     # just the incident_id) keeps one widget visitor from poking at another
     # visitor's in-progress issue report just by guessing small integers.
-    if incident is None or incident.conversation.session_id != session_id:
+    # Public message creation namespaces widget sessions before persisting
+    # them (see send_public_message below). The browser keeps and sends the
+    # raw UUID, so apply the same namespace for incident authorization.
+    expected_session_id = f"widget:{session_id}"
+    if incident is None or incident.conversation.session_id != expected_session_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Incident not found")
     return incident
 
