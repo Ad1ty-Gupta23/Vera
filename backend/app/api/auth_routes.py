@@ -84,6 +84,17 @@ def get_me(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout")
 def logout():
-    response = RedirectResponse(f"{settings.frontend_url}/login")
-    response.delete_cookie(settings.session_cookie_name)
+    """Clear the session cookie and return 200 OK.
+    The frontend owns the post-logout redirect (it always navigates to '/').
+    Returning a RedirectResponse here caused fetch() to silently follow the
+    redirect and hit a CORS error, which prevented the navigate('/') call
+    from ever executing.
+    """
+    from fastapi.responses import JSONResponse
+    response = JSONResponse({"ok": True})
+    response.delete_cookie(
+        key=settings.session_cookie_name,
+        httponly=True,
+        samesite="lax",
+    )
     return response

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useCallback } from 'react';
 import { useBusiness } from '../../context/BusinessContext';
 import { useToast } from '../../context/ToastContext';
 import EmptyState from '../../components/common/EmptyState';
@@ -13,14 +14,38 @@ import {
   resolveKnowledgeGap,
   dismissKnowledgeGap,
 } from '../../services/knowledgeBase';
+import { useRef } from 'react';
 
 const ACCEPTED_EXTENSIONS = ['.pdf', '.txt', '.md', '.docx'];
 const MAX_FILE_SIZE_MB = 15;
 
-const STATUS_STYLES = {
-  ready: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-  processing: 'text-amber-400 bg-amber-500/10 border-amber-500/20',
-  failed: 'text-red-400 bg-red-500/10 border-red-500/20',
+/* ─── shared styles ────────────────────────────────────────── */
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '16px' };
+const INPUT_STYLE = {
+  width: '100%', boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(180,195,255,0.12)',
+  borderRadius: '10px',
+  padding: '10px 14px',
+  fontSize: '13px',
+  color: '#DCE5FF',
+  outline: 'none',
+  transition: 'border-color 0.2s',
+};
+const BTN_PRIMARY = {
+  background: 'linear-gradient(135deg, #7191FF, #9B8CFF)',
+  border: 'none', borderRadius: '10px',
+  padding: '9px 18px',
+  fontSize: '13px', fontWeight: 600, color: '#fff',
+  cursor: 'pointer', transition: 'opacity 0.15s',
+};
+const BTN_GHOST = {
+  background: 'rgba(255,255,255,0.05)',
+  border: '1px solid rgba(180,195,255,0.15)',
+  borderRadius: '10px',
+  padding: '8px 14px',
+  fontSize: '12px', color: '#A7AEC4',
+  cursor: 'pointer', transition: 'all 0.15s',
 };
 
 function formatBytes(bytes) {
@@ -30,10 +55,20 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const STATUS_COLORS = {
+  ready:      { text: '#34D399', bg: 'rgba(52,211,153,0.1)',  border: 'rgba(52,211,153,0.25)'  },
+  processing: { text: '#FBBF24', bg: 'rgba(251,191,36,0.1)', border: 'rgba(251,191,36,0.25)'  },
+  failed:     { text: '#F87171', bg: 'rgba(248,113,113,0.1)', border: 'rgba(248,113,113,0.25)' },
+};
+
 function StatusBadge({ status }) {
-  const cls = STATUS_STYLES[status] || 'text-slate-400 bg-slate-500/10 border-slate-500/20';
+  const c = STATUS_COLORS[status] || { text: '#A7AEC4', bg: 'rgba(255,255,255,0.06)', border: 'rgba(180,195,255,0.15)' };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full border text-[11px] font-medium capitalize ${cls}`}>
+    <span style={{
+      padding: '2px 10px', borderRadius: '20px', fontSize: '11px', fontWeight: 600,
+      color: c.text, background: c.bg, border: `1px solid ${c.border}`,
+      textTransform: 'capitalize',
+    }}>
       {status}
     </span>
   );
@@ -41,24 +76,42 @@ function StatusBadge({ status }) {
 
 function DocumentRow({ doc, onDelete, deleting }) {
   return (
-    <div className="flex items-center gap-4 px-4 py-3 border-b border-slate-800/70 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm text-slate-200 truncate">{doc.filename}</p>
-        <p className="text-xs text-slate-500 mt-0.5">
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '14px',
+      padding: '12px 18px',
+      borderBottom: '1px solid rgba(180,195,255,0.06)',
+    }}>
+      {/* Icon */}
+      <div style={{
+        width: '34px', height: '34px', borderRadius: '10px', flexShrink: 0,
+        background: 'rgba(113,145,255,0.1)', border: '1px solid rgba(113,145,255,0.2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#7191FF" strokeWidth="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" />
+        </svg>
+      </div>
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <p style={{ fontSize: '13px', color: '#DCE5FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
+          {doc.filename}
+        </p>
+        <p style={{ fontSize: '11px', color: '#5A6180', marginTop: '2px' }}>
           {doc.file_type.toUpperCase()} · {formatBytes(doc.file_size_bytes)}
           {doc.status === 'ready' && doc.chunk_count != null && (
             <> · {doc.chunk_count} chunk{doc.chunk_count === 1 ? '' : 's'} indexed</>
           )}
         </p>
         {doc.status === 'failed' && doc.error_message && (
-          <p className="text-xs text-red-400 mt-1">{doc.error_message}</p>
+          <p style={{ fontSize: '11px', color: '#F87171', marginTop: '4px' }}>{doc.error_message}</p>
         )}
       </div>
       <StatusBadge status={doc.status} />
       <button
         onClick={() => onDelete(doc.id)}
         disabled={deleting}
-        className="text-xs text-slate-500 hover:text-red-400 transition-colors disabled:opacity-40 shrink-0"
+        style={{ fontSize: '12px', color: '#5A6180', background: 'none', border: 'none', cursor: 'pointer', transition: 'color 0.15s', flexShrink: 0 }}
+        onMouseEnter={(e) => e.currentTarget.style.color = '#F87171'}
+        onMouseLeave={(e) => e.currentTarget.style.color = '#5A6180'}
       >
         Remove
       </button>
@@ -89,44 +142,39 @@ function TestAssistant({ businessId }) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-      <h2 className="text-sm font-medium text-slate-200">Test knowledge base</h2>
-      <p className="text-xs text-slate-500 mt-1">
-        Ask a question to preview raw answers from the knowledge base above. This
-        checks retrieval only — it won't detect issue reports or other assistant
-        behavior. For a full preview of your assistant, use the test box on the
-        Customize Assistant page instead.
+    <div style={{ ...GLASS, padding: '20px' }}>
+      <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: '0 0 4px' }}>Test knowledge base</h2>
+      <p style={{ fontSize: '12px', color: '#5A6180', marginBottom: '16px' }}>
+        Ask a question to preview raw answers from the knowledge base above.
       </p>
-      <form onSubmit={handleAsk} className="mt-4 flex gap-2">
+      <form onSubmit={handleAsk} style={{ display: 'flex', gap: '8px' }}>
         <input
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="e.g. What's your return policy?"
-          className="flex-1 rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
+          style={{ ...INPUT_STYLE, flex: 1 }}
+          onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
         />
         <button
           type="submit"
           disabled={asking || !question.trim()}
-          className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          style={{ ...BTN_PRIMARY, opacity: asking || !question.trim() ? 0.4 : 1, flexShrink: 0 }}
         >
           {asking ? 'Asking…' : 'Ask'}
         </button>
       </form>
 
-      {error && <div className="mt-4"><ErrorMessage error={error} onDismiss={() => setError(null)} /></div>}
+      {error && <div style={{ marginTop: '12px' }}><ErrorMessage error={error} onDismiss={() => setError(null)} /></div>}
 
       {result && (
-        <div className="mt-4 rounded-lg border border-slate-800 bg-slate-950 px-4 py-3">
-          <p className="text-sm text-slate-200 whitespace-pre-wrap">{result.answer}</p>
+        <div style={{ marginTop: '14px', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(180,195,255,0.08)', borderRadius: '12px', padding: '14px' }}>
+          <p style={{ fontSize: '13px', color: '#DCE5FF', whiteSpace: 'pre-wrap' }}>{result.answer}</p>
           {result.grounded && result.sources?.length > 0 && (
-            <p className="text-[11px] text-slate-500 mt-2">
-              Answered from: {result.sources.join(', ')}
-            </p>
+            <p style={{ fontSize: '11px', color: '#5A6180', marginTop: '8px' }}>Answered from: {result.sources.join(', ')}</p>
           )}
           {!result.grounded && (
-            <p className="text-[11px] text-amber-500/80 mt-2">
-              No matching information found in the knowledge base.
-            </p>
+            <p style={{ fontSize: '11px', color: 'rgba(251,191,36,0.7)', marginTop: '8px' }}>No matching information found in the knowledge base.</p>
           )}
         </div>
       )}
@@ -149,9 +197,7 @@ function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
     }
   }, [businessId, toast]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const handleResolve = async (gap) => {
     const answer = (answers[gap.id] || '').trim();
@@ -183,65 +229,72 @@ function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
   };
 
   return (
-    <section className="rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
-      <div className="flex items-start justify-between gap-4">
+    <section style={{
+      background: 'rgba(113,145,255,0.04)',
+      border: '1px solid rgba(113,145,255,0.2)',
+      borderRadius: '16px', padding: '20px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px', marginBottom: '16px' }}>
         <div>
-          <h2 className="text-sm font-medium text-slate-100">Knowledge gaps</h2>
-          <p className="text-xs text-slate-500 mt-1 max-w-xl">
-            Questions the assistant refused to guess. Approve an answer once and it becomes
-            searchable business knowledge for future customers.
+          <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Knowledge gaps</h2>
+          <p style={{ fontSize: '12px', color: '#5A6180', marginTop: '4px', maxWidth: '480px' }}>
+            Questions the assistant refused to guess. Approve an answer once and it becomes searchable business knowledge for future customers.
           </p>
         </div>
         {gaps?.length > 0 && (
-          <span className="rounded-full bg-amber-500/10 border border-amber-500/20 px-2.5 py-1 text-[11px] font-medium text-amber-300">
+          <span style={{
+            borderRadius: '20px', padding: '3px 10px', fontSize: '11px', fontWeight: 600,
+            color: '#FBBF24', background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.25)', flexShrink: 0,
+          }}>
             {gaps.length} open
           </span>
         )}
       </div>
 
       {gaps === undefined ? (
-        <div className="flex justify-center py-8">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
           <LoadingIndicator label="Finding unanswered questions..." />
         </div>
       ) : gaps.length === 0 ? (
-        <div className="mt-4 rounded-lg border border-dashed border-slate-800 px-4 py-6 text-center">
-          <p className="text-sm text-emerald-400">No open knowledge gaps</p>
-          <p className="text-xs text-slate-600 mt-1">
-            Unknown customer questions will automatically appear here.
-          </p>
+        <div style={{ borderRadius: '10px', border: '1px dashed rgba(180,195,255,0.12)', padding: '24px', textAlign: 'center' }}>
+          <p style={{ fontSize: '13px', color: '#34D399' }}>No open knowledge gaps</p>
+          <p style={{ fontSize: '11px', color: '#5A6180', marginTop: '4px' }}>Unknown customer questions will automatically appear here.</p>
         </div>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {gaps.map((gap) => (
-            <div key={gap.id} className="rounded-lg border border-slate-800 bg-slate-950/70 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm font-medium text-slate-200">{gap.question}</p>
-                <span className="shrink-0 text-[11px] text-amber-300 bg-amber-500/10 rounded-full px-2 py-0.5">
+            <div key={gap.id} style={{ ...GLASS, padding: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', marginBottom: '10px' }}>
+                <p style={{ fontSize: '13px', fontWeight: 500, color: '#DCE5FF', margin: 0 }}>{gap.question}</p>
+                <span style={{
+                  fontSize: '11px', color: '#FBBF24', background: 'rgba(251,191,36,0.1)',
+                  borderRadius: '20px', padding: '2px 8px', flexShrink: 0,
+                }}>
                   Asked {gap.occurrence_count} {gap.occurrence_count === 1 ? 'time' : 'times'}
                 </span>
               </div>
               <textarea
                 value={answers[gap.id] || ''}
-                onChange={(event) =>
-                  setAnswers((current) => ({ ...current, [gap.id]: event.target.value }))
-                }
+                onChange={(event) => setAnswers((current) => ({ ...current, [gap.id]: event.target.value }))}
                 rows={3}
                 maxLength={4000}
                 placeholder="Enter the verified answer customers should receive..."
-                className="mt-3 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500/60 resize-none"
+                style={{ ...INPUT_STYLE, resize: 'none', marginBottom: '10px' }}
+                onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+                onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
               />
-              <div className="mt-2 flex gap-2">
+              <div style={{ display: 'flex', gap: '8px' }}>
                 <button
                   onClick={() => handleResolve(gap)}
                   disabled={busyId === gap.id || !(answers[gap.id] || '').trim()}
-                  className="rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-violet-500 disabled:opacity-40"
+                  style={{ ...BTN_PRIMARY, fontSize: '12px', padding: '7px 14px', opacity: busyId === gap.id || !(answers[gap.id] || '').trim() ? 0.4 : 1 }}
                 >
                   {busyId === gap.id ? 'Saving...' : 'Approve & teach VERA'}
                 </button>
                 <button
                   onClick={() => handleDismiss(gap.id)}
                   disabled={busyId === gap.id}
-                  className="rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-400 hover:bg-slate-800 disabled:opacity-40"
+                  style={{ ...BTN_GHOST, fontSize: '12px', padding: '7px 14px', opacity: busyId === gap.id ? 0.4 : 1 }}
                 >
                   Dismiss
                 </button>
@@ -259,7 +312,7 @@ export default function KnowledgeBase() {
   const toast = useToast();
   const fileInputRef = useRef(null);
 
-  const [documents, setDocuments] = useState(undefined); // undefined = loading
+  const [documents, setDocuments] = useState(undefined);
   const [loadError, setLoadError] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
@@ -279,12 +332,8 @@ export default function KnowledgeBase() {
     }
   }, [businessId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
-  // Documents still "processing" get polled briefly so the status updates
-  // without the user having to refresh the page manually.
   useEffect(() => {
     if (!documents?.some((d) => d.status === 'processing')) return;
     const timer = setTimeout(refresh, 2000);
@@ -295,36 +344,17 @@ export default function KnowledgeBase() {
     async (fileList) => {
       const files = Array.from(fileList || []);
       if (files.length === 0) return;
-
       setUploading(true);
       let succeeded = 0;
       let failed = 0;
       for (const file of files) {
         const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
-        if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-          toast.error(`${file.name}: unsupported file type.`);
-          failed += 1;
-          continue;
-        }
-        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
-          toast.error(`${file.name}: exceeds ${MAX_FILE_SIZE_MB}MB limit.`);
-          failed += 1;
-          continue;
-        }
-        try {
-          await uploadDocument(businessId, file);
-          succeeded += 1;
-        } catch (err) {
-          toast.error(`${file.name}: ${err.message || 'upload failed'}`);
-          failed += 1;
-        }
+        if (!ACCEPTED_EXTENSIONS.includes(ext)) { toast.error(`${file.name}: unsupported file type.`); failed += 1; continue; }
+        if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { toast.error(`${file.name}: exceeds ${MAX_FILE_SIZE_MB}MB limit.`); failed += 1; continue; }
+        try { await uploadDocument(businessId, file); succeeded += 1; } catch (err) { toast.error(`${file.name}: ${err.message || 'upload failed'}`); failed += 1; }
       }
       setUploading(false);
-      if (succeeded > 0) {
-        toast.success(
-          succeeded === 1 ? 'Document uploaded — processing now.' : `${succeeded} documents uploaded.`
-        );
-      }
+      if (succeeded > 0) toast.success(succeeded === 1 ? 'Document uploaded — processing now.' : `${succeeded} documents uploaded.`);
       if (fileInputRef.current) fileInputRef.current.value = '';
       refresh();
     },
@@ -354,32 +384,45 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-xl font-semibold text-slate-100">Knowledge Base</h1>
-      <p className="text-sm text-slate-500 mt-1">
-        Upload documents so your assistant can answer customer questions using your
-        business's own information. Answers are generated only from what you upload here.
+    <div style={{ maxWidth: '720px', fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF' }}>
+      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>
+        Knowledge Base
+      </h1>
+      <p style={{ fontSize: '13px', color: '#5A6180', marginBottom: '24px' }}>
+        Upload documents so your assistant can answer customer questions using your business's own information.
       </p>
 
+      {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
         onDragLeave={() => setDragActive(false)}
         onDrop={onDrop}
-        className={`mt-6 rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
-          dragActive ? 'border-violet-500/60 bg-violet-500/5' : 'border-slate-800 bg-slate-900/40'
-        }`}
+        style={{
+          borderRadius: '16px',
+          border: dragActive ? '2px dashed rgba(113,145,255,0.7)' : '2px dashed rgba(180,195,255,0.15)',
+          background: dragActive ? 'rgba(113,145,255,0.06)' : 'rgba(255,255,255,0.02)',
+          padding: '40px 24px',
+          textAlign: 'center',
+          transition: 'all 0.2s',
+          marginBottom: '20px',
+          cursor: 'pointer',
+        }}
+        onClick={() => fileInputRef.current?.click()}
       >
-        <p className="text-sm text-slate-300">
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '12px', margin: '0 auto 14px',
+          background: 'rgba(113,145,255,0.1)', border: '1px solid rgba(113,145,255,0.2)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7191FF" strokeWidth="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+          </svg>
+        </div>
+        <p style={{ fontSize: '13px', color: '#A7AEC4', margin: '0 0 6px' }}>
           Drag and drop files here, or{' '}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="text-violet-400 hover:text-violet-300 underline underline-offset-2"
-          >
-            browse
-          </button>
+          <span style={{ color: '#A8B7FF', textDecoration: 'underline', cursor: 'pointer' }}>browse</span>
         </p>
-        <p className="text-xs text-slate-600 mt-2">
+        <p style={{ fontSize: '11px', color: '#5A6180', margin: 0 }}>
           PDF, TXT, MD, or DOCX — up to {MAX_FILE_SIZE_MB}MB each
         </p>
         <input
@@ -387,21 +430,22 @@ export default function KnowledgeBase() {
           type="file"
           multiple
           accept={ACCEPTED_EXTENSIONS.join(',')}
-          className="hidden"
+          style={{ display: 'none' }}
           onChange={(e) => handleFiles(e.target.files)}
         />
         {uploading && (
-          <div className="mt-4 flex justify-center">
+          <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center' }}>
             <LoadingIndicator label="Uploading and processing…" />
           </div>
         )}
       </div>
 
-      <div className="mt-6">
+      {/* Document list */}
+      <div style={{ marginBottom: '20px' }}>
         {loadError && <ErrorMessage error={loadError} onDismiss={() => setLoadError(null)} />}
 
         {documents === undefined ? (
-          <div className="flex justify-center py-10">
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px 0' }}>
             <LoadingIndicator label="Loading knowledge base…" />
           </div>
         ) : documents.length === 0 ? (
@@ -410,27 +454,24 @@ export default function KnowledgeBase() {
             description="Upload FAQs, product info, pricing, or policies so your assistant can answer from real business content instead of guessing."
           />
         ) : (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-            {documents.map((doc) => (
-              <DocumentRow
-                key={doc.id}
-                doc={doc}
-                onDelete={handleDelete}
-                deleting={deletingId === doc.id}
-              />
+          <div style={{ ...GLASS, overflow: 'hidden', padding: 0 }}>
+            {documents.map((doc, idx) => (
+              <div key={doc.id} style={{ borderBottom: idx < documents.length - 1 ? '1px solid rgba(180,195,255,0.06)' : 'none' }}>
+                <DocumentRow doc={doc} onDelete={handleDelete} deleting={deletingId === doc.id} />
+              </div>
             ))}
           </div>
         )}
       </div>
 
       {businessId && (
-        <div className="mt-6">
+        <div style={{ marginBottom: '20px' }}>
           <KnowledgeGaps businessId={businessId} onKnowledgeChanged={refresh} />
         </div>
       )}
 
       {documents && documents.some((d) => d.status === 'ready') && businessId && (
-        <div className="mt-6">
+        <div>
           <TestAssistant businessId={businessId} />
         </div>
       )}

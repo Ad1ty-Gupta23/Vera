@@ -33,8 +33,21 @@ export function AuthProvider({ children }) {
   };
 
   const logout = async () => {
-    await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include' });
-    setUser(null);
+    try {
+      // Use redirect:'manual' so fetch() doesn't silently follow any
+      // redirect the server might return, which can cause CORS errors.
+      await fetch(`${API_BASE}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+        redirect: 'manual',
+      });
+    } catch {
+      // Network error or CORS block — the server still deleted the cookie
+      // for any request that reached it. We always clear local state.
+    } finally {
+      // Always clear the local auth state regardless of network outcome.
+      setUser(null);
+    }
   };
 
   const value = {

@@ -8,27 +8,47 @@ import { getGmailStatus } from '../../services/gmail';
 import { getEmbedConfig } from '../../services/embed';
 import { listTickets } from '../../services/support';
 
-function StatusCard({ label, value, tone = 'neutral', to }) {
-  const toneClasses = {
-    neutral: 'text-slate-400 border-slate-800',
-    good: 'text-emerald-400 border-emerald-900/60',
-    pending: 'text-amber-400 border-amber-900/60',
-  }[tone];
+/* ─── Design tokens ──────────────────────────────────────────── */
+const GLASS = {
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(180,195,255,0.1)',
+  borderRadius: '16px',
+};
 
-  const content = (
-    <div className={`rounded-xl border bg-slate-900/60 px-4 py-4 ${toneClasses}`}>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="text-sm font-medium mt-1">{value}</p>
+const TONE_COLORS = {
+  good:    { text: '#34D399', bg: 'rgba(52,211,153,0.08)',  border: 'rgba(52,211,153,0.2)'  },
+  pending: { text: '#FBBF24', bg: 'rgba(251,191,36,0.08)', border: 'rgba(251,191,36,0.2)'  },
+  neutral: { text: '#A7AEC4', bg: 'rgba(255,255,255,0.04)', border: 'rgba(180,195,255,0.1)' },
+};
+
+function StatusCard({ label, value, tone = 'neutral', to }) {
+  const { text, bg, border } = TONE_COLORS[tone] ?? TONE_COLORS.neutral;
+
+  const inner = (
+    <div style={{
+      ...GLASS,
+      background: bg,
+      border: `1px solid ${border}`,
+      padding: '16px',
+      transition: 'all 0.2s',
+    }}>
+      <p style={{ fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5A6180', marginBottom: '8px' }}>
+        {label}
+      </p>
+      <p style={{ fontSize: '14px', fontWeight: 500, color: text }}>{value}</p>
     </div>
   );
 
   return to ? (
-    <Link to={to} className="block hover:brightness-110 transition-all">
-      {content}
+    <Link
+      to={to}
+      style={{ display: 'block', textDecoration: 'none' }}
+      onMouseEnter={(e) => { e.currentTarget.firstChild.style.filter = 'brightness(1.08)'; }}
+      onMouseLeave={(e) => { e.currentTarget.firstChild.style.filter = 'none'; }}
+    >
+      {inner}
     </Link>
-  ) : (
-    content
-  );
+  ) : inner;
 }
 
 export default function BusinessOverview() {
@@ -85,149 +105,122 @@ export default function BusinessOverview() {
   const activeTickets = tickets?.filter((ticket) => !['resolved', 'closed'].includes(ticket.status)).length;
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-slate-100">{business?.name}</h1>
-      <p className="text-sm text-slate-500 mt-1">
-        {business?.description || 'Add a description in Settings so your assistant can introduce itself.'}
-      </p>
-
-      <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatusCard label="Assistant status" value={assistantStatus} tone={assistantTone} to="/business/customize" />
-        <StatusCard
-          label="Knowledge base"
-          value={kbStatus}
-          tone={kbTone}
-          to="/business/knowledge-base"
-        />
-        <StatusCard label="Email integration" value={emailStatus} tone={emailTone} to="/business/email" />
-        <StatusCard
-          label="Website install"
-          value={embedStatus}
-          tone={embedTone}
-          to="/business/embed"
-        />
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF', maxWidth: '900px' }}>
+      {/* Header */}
+      <div style={{ marginBottom: '28px' }}>
+        <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '24px', fontWeight: 700, color: '#fff', margin: 0 }}>
+          {business?.name}
+        </h1>
+        <p style={{ fontSize: '14px', color: '#5A6180', marginTop: '6px' }}>
+          {business?.description || 'Add a description in Settings so your assistant can introduce itself.'}
+        </p>
       </div>
 
-      <div className="mt-8">
-        <div className="flex items-end justify-between gap-4 mb-3">
+      {/* Status cards */}
+      <div style={{ display: 'grid', gap: '12px', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', marginBottom: '32px' }}>
+        <StatusCard label="Assistant status" value={assistantStatus} tone={assistantTone} to="/business/customize" />
+        <StatusCard label="Knowledge base" value={kbStatus} tone={kbTone} to="/business/knowledge-base" />
+        <StatusCard label="Email integration" value={emailStatus} tone={emailTone} to="/business/email" />
+        <StatusCard label="Website install" value={embedStatus} tone={embedTone} to="/business/embed" />
+      </div>
+
+      {/* Support impact */}
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '14px' }}>
           <div>
-            <h2 className="text-sm font-medium text-slate-200">Support impact</h2>
-            <p className="text-xs text-slate-600 mt-0.5">
+            <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Support impact</h2>
+            <p style={{ fontSize: '11px', color: '#5A6180', marginTop: '3px' }}>
               Live outcomes from customer conversations and verified answers.
             </p>
           </div>
-          <Link to="/business/knowledge-base" className="text-xs text-violet-400 hover:text-violet-300">
-            Improve answers →
-          </Link>
+          <Link to="/business/knowledge-base" style={{ fontSize: '12px', color: '#A8B7FF', textDecoration: 'none' }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#DCE5FF'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#A8B7FF'}
+          >Improve answers →</Link>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <StatusCard
-            label="Customer conversations"
-            value={insights === undefined ? 'Loading…' : insights?.conversation_count ?? 'Unavailable'}
-            tone="neutral"
-          />
-          <StatusCard
-            label="Grounded answer rate"
-            value={insights === undefined ? 'Loading…' : insights ? `${insights.grounded_rate}%` : 'Unavailable'}
-            tone={insights?.grounded_rate >= 80 ? 'good' : 'pending'}
-          />
-          <StatusCard
-            label="Open knowledge gaps"
-            value={
-              insights === undefined
-                ? 'Loading…'
-                : insights
-                ? `${insights.open_gaps} (${insights.unanswered_questions} asks)`
-                : 'Unavailable'
-            }
-            tone={insights?.open_gaps === 0 ? 'good' : 'pending'}
-            to="/business/knowledge-base"
-          />
-          <StatusCard
-            label="Action emails sent"
-            value={insights === undefined ? 'Loading…' : insights?.sent_incidents ?? 'Unavailable'}
-            tone={insights?.sent_incidents > 0 ? 'good' : 'neutral'}
-          />
-          <StatusCard
-            label="Active customer cases"
-            value={tickets === undefined ? 'Loading…' : activeTickets ?? 'Unavailable'}
-            tone={activeTickets > 0 ? 'pending' : 'good'}
-            to="/business/actions"
-          />
+        <div style={{ display: 'grid', gap: '10px', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))' }}>
+          <StatusCard label="Customer conversations" value={insights === undefined ? 'Loading…' : insights?.conversation_count ?? 'Unavailable'} tone="neutral" />
+          <StatusCard label="Grounded answer rate" value={insights === undefined ? 'Loading…' : insights ? `${insights.grounded_rate}%` : 'Unavailable'} tone={insights?.grounded_rate >= 80 ? 'good' : 'pending'} />
+          <StatusCard label="Open knowledge gaps" value={insights === undefined ? 'Loading…' : insights ? `${insights.open_gaps} (${insights.unanswered_questions} asks)` : 'Unavailable'} tone={insights?.open_gaps === 0 ? 'good' : 'pending'} to="/business/knowledge-base" />
+          <StatusCard label="Action emails sent" value={insights === undefined ? 'Loading…' : insights?.sent_incidents ?? 'Unavailable'} tone={insights?.sent_incidents > 0 ? 'good' : 'neutral'} />
+          <StatusCard label="Active customer cases" value={tickets === undefined ? 'Loading…' : activeTickets ?? 'Unavailable'} tone={activeTickets > 0 ? 'pending' : 'good'} to="/business/actions" />
         </div>
       </div>
 
-      <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-        <h2 className="text-sm font-medium text-slate-200">Business profile</h2>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2 text-sm">
-          <div>
-            <dt className="text-slate-500 text-xs">Category</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.category || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500 text-xs">Website</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.website || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500 text-xs">Contact email</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.contact_email || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500 text-xs">Phone</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.phone || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500 text-xs">Action inbox email</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.helpdesk_email || '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-slate-500 text-xs">Working hours</dt>
-            <dd className="text-slate-200 mt-0.5">{business?.working_hours || '—'}</dd>
-          </div>
+      {/* Business profile */}
+      <div style={{ ...GLASS, padding: '20px', marginBottom: '28px' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: '0 0 16px' }}>Business profile</h2>
+        <dl style={{ display: 'grid', gap: '14px', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+          {[
+            ['Category', business?.category],
+            ['Website', business?.website],
+            ['Contact email', business?.contact_email],
+            ['Phone', business?.phone],
+            ['Action inbox email', business?.helpdesk_email],
+            ['Working hours', business?.working_hours],
+          ].map(([key, val]) => (
+            <div key={key}>
+              <dt style={{ fontSize: '11px', color: '#5A6180', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{key}</dt>
+              <dd style={{ fontSize: '13px', color: '#DCE5FF', marginTop: '4px' }}>{val || '—'}</dd>
+            </div>
+          ))}
         </dl>
         <Link
           to="/business/settings"
-          className="inline-block mt-5 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+          style={{ display: 'inline-block', marginTop: '18px', fontSize: '12px', color: '#A8B7FF', textDecoration: 'none' }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#DCE5FF'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#A8B7FF'}
         >
           Edit profile →
         </Link>
       </div>
 
-      <div className="mt-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-slate-200">Recent conversations</h2>
+      {/* Recent conversations */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+          <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Recent conversations</h2>
           {recentConversations.length > 0 && (
-            <Link to="/business/conversations" className="text-xs text-violet-400 hover:text-violet-300 transition-colors">
-              View all →
-            </Link>
+            <Link to="/business/conversations"
+              style={{ fontSize: '12px', color: '#A8B7FF', textDecoration: 'none' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#DCE5FF'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#A8B7FF'}
+            >View all →</Link>
           )}
         </div>
         {conversations === undefined ? (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-5 py-8 text-center">
-            <p className="text-sm text-slate-500">Loading…</p>
+          <div style={{ ...GLASS, padding: '32px', textAlign: 'center' }}>
+            <p style={{ fontSize: '13px', color: '#5A6180' }}>Loading…</p>
           </div>
         ) : recentConversations.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-slate-800 bg-slate-900/40 px-5 py-8 text-center">
-            <p className="text-sm text-slate-500">
-              No conversations yet — once customers chat with your assistant (or you try it from
-              Customize Assistant), they'll show up here.
+          <div style={{ ...GLASS, padding: '32px', textAlign: 'center', borderStyle: 'dashed' }}>
+            <p style={{ fontSize: '13px', color: '#5A6180' }}>
+              No conversations yet — once customers chat with your assistant (or you try it from Customize Assistant), they'll show up here.
             </p>
           </div>
         ) : (
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-            {recentConversations.map((c) => (
+          <div style={{ ...GLASS, overflow: 'hidden', padding: 0 }}>
+            {recentConversations.map((c, idx) => (
               <Link
                 key={c.id}
                 to="/business/conversations"
-                className="flex items-center justify-between gap-4 px-4 py-3 border-b border-slate-800/70 last:border-b-0 hover:bg-slate-900 transition-colors"
+                style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px',
+                  padding: '12px 18px', textDecoration: 'none',
+                  borderBottom: idx < recentConversations.length - 1 ? '1px solid rgba(180,195,255,0.07)' : 'none',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
+                onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm text-slate-200 truncate">Conversation #{c.id}</p>
-                  <p className="text-xs text-slate-500 truncate mt-0.5">
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <p style={{ fontSize: '13px', color: '#DCE5FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0 }}>
+                    Conversation #{c.id}
+                  </p>
+                  <p style={{ fontSize: '11px', color: '#5A6180', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: '2px' }}>
                     {c.last_message_preview || 'No messages yet'}
                   </p>
                 </div>
-                <span className="text-[11px] text-slate-600 shrink-0">
+                <span style={{ fontSize: '11px', color: '#3D4461', flexShrink: 0 }}>
                   {c.message_count} msg{c.message_count === 1 ? '' : 's'}
                 </span>
               </Link>

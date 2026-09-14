@@ -10,8 +10,18 @@ const ERROR_MESSAGES = {
   oauth_failed: "Google couldn't complete the connection. Please try again.",
 };
 
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '16px' };
+const BTN_PRIMARY = {
+  background: 'linear-gradient(135deg, #7191FF, #9B8CFF)', border: 'none', borderRadius: '10px',
+  padding: '10px 20px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer',
+};
+const BTN_GHOST = {
+  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(180,195,255,0.15)', borderRadius: '10px',
+  padding: '8px 16px', fontSize: '12px', color: '#A7AEC4', cursor: 'pointer',
+};
+
 export default function EmailIntegration() {
-  const [status, setStatus] = useState(undefined); // undefined = loading
+  const [status, setStatus] = useState(undefined);
   const [loadError, setLoadError] = useState(null);
   const [disconnecting, setDisconnecting] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -27,9 +37,7 @@ export default function EmailIntegration() {
     }
   }, []);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   useEffect(() => {
     if (searchParams.get('gmail') === 'connected') {
@@ -58,68 +66,59 @@ export default function EmailIntegration() {
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-slate-100">Email Integration</h1>
-      <p className="text-sm text-slate-500 mt-1 max-w-2xl">
-        Connect your Gmail account so your assistant can send customer issue reports to your
-        helpdesk email. Customers always review and confirm the email before anything sends —
-        nothing goes out automatically.
+    <div style={{ maxWidth: '640px', fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF' }}>
+      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>
+        Email Integration
+      </h1>
+      <p style={{ fontSize: '13px', color: '#5A6180', marginBottom: '24px' }}>
+        Connect your Gmail account so your assistant can send customer issue reports to your helpdesk email. Customers always review and confirm the email before anything sends — nothing goes out automatically.
       </p>
 
-      {loadError && (
-        <div className="mt-6 max-w-2xl">
-          <ErrorMessage error={loadError} onDismiss={() => setLoadError(null)} />
-        </div>
-      )}
+      {loadError && <div style={{ marginBottom: '16px' }}><ErrorMessage error={loadError} onDismiss={() => setLoadError(null)} /></div>}
 
       {status === undefined ? (
-        <div className="flex justify-center py-14">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '56px 0' }}>
           <LoadingIndicator label="Checking Gmail connection…" />
         </div>
       ) : (
-        <div className="mt-6 max-w-2xl rounded-xl border border-slate-800 bg-slate-900/60 p-5">
+        <div style={{ ...GLASS, padding: '24px' }}>
           {status.connected ? (
-            <div className="flex items-start justify-between gap-4">
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '16px' }}>
               <div>
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <p className="text-sm font-medium text-slate-200">Gmail connected</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#34D399', display: 'inline-block' }} />
+                  <p style={{ fontSize: '14px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Gmail connected</p>
                 </div>
-                <p className="text-sm text-slate-400 mt-1.5">{status.email}</p>
-                <p className="text-xs text-slate-600 mt-2 max-w-md">
-                  Issue-report emails send from this account to your configured helpdesk email.
-                  You can change the helpdesk email in Settings.
+                <p style={{ fontSize: '13px', color: '#A7AEC4', margin: '0 0 8px' }}>{status.email}</p>
+                <p style={{ fontSize: '11px', color: '#5A6180', maxWidth: '360px' }}>
+                  Issue-report emails send from this account to your configured helpdesk email. You can change the helpdesk email in Settings.
                 </p>
               </div>
               <button
                 onClick={handleDisconnect}
                 disabled={disconnecting}
-                className="shrink-0 rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40"
+                style={{ ...BTN_GHOST, flexShrink: 0, opacity: disconnecting ? 0.5 : 1 }}
               >
                 {disconnecting ? 'Disconnecting…' : 'Disconnect'}
               </button>
             </div>
           ) : (
             <div>
-              <div className="flex items-center gap-2">
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    status.status === 'needs_reauth' ? 'bg-amber-400' : 'bg-slate-600'
-                  }`}
-                />
-                <p className="text-sm font-medium text-slate-200">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                <span style={{
+                  width: '8px', height: '8px', borderRadius: '50%', display: 'inline-block',
+                  background: status.status === 'needs_reauth' ? '#FBBF24' : '#5A6180',
+                }} />
+                <p style={{ fontSize: '14px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>
                   {status.status === 'needs_reauth' ? 'Reconnect needed' : 'Gmail not connected'}
                 </p>
               </div>
-              <p className="text-sm text-slate-500 mt-1.5 max-w-md">
+              <p style={{ fontSize: '13px', color: '#5A6180', maxWidth: '400px', marginBottom: '20px' }}>
                 {status.status === 'needs_reauth'
                   ? 'Your Gmail connection expired or was revoked in your Google Account. Reconnect to keep sending issue reports.'
                   : 'Connect Gmail to let your assistant email customer issue reports to your helpdesk.'}
               </p>
-              <button
-                onClick={startGmailConnect}
-                className="mt-4 rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors"
-              >
+              <button onClick={startGmailConnect} style={BTN_PRIMARY}>
                 {status.status === 'needs_reauth' ? 'Reconnect Gmail' : 'Connect Gmail'}
               </button>
             </div>

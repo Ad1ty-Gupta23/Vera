@@ -21,16 +21,28 @@ const BUSINESS_VOICE_WS_BASE = API_BASE.replace(/^http/, 'ws');
 const THEME_PRESETS = ['#7c3aed', '#2563eb', '#059669', '#dc2626', '#d97706', '#0891b2'];
 const MESSAGE_URL_RE = /(https?:\/\/[^\s]+)/g;
 
+/* ─── shared styles ────────────────────────────────────────── */
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '16px' };
+const INPUT_STYLE = {
+  width: '100%', boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.12)',
+  borderRadius: '10px', padding: '10px 14px', fontSize: '13px', color: '#DCE5FF',
+  outline: 'none', transition: 'border-color 0.2s',
+};
+const BTN_PRIMARY = {
+  background: 'linear-gradient(135deg, #7191FF, #9B8CFF)', border: 'none', borderRadius: '10px',
+  padding: '9px 18px', fontSize: '13px', fontWeight: 600, color: '#fff', cursor: 'pointer',
+};
+const BTN_GHOST = {
+  background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(180,195,255,0.15)', borderRadius: '10px',
+  padding: '8px 14px', fontSize: '12px', color: '#A7AEC4', cursor: 'pointer',
+};
+
 function MessageContent({ children }) {
   return String(children || '').split(MESSAGE_URL_RE).map((part, index) => (
     /^https?:\/\//i.test(part) ? (
-      <a
-        key={index}
-        href={part}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="underline underline-offset-2 break-all"
-      >
+      <a key={index} href={part} target="_blank" rel="noopener noreferrer"
+        style={{ textDecoration: 'underline', textUnderlineOffset: '2px', wordBreak: 'break-all' }}>
         {part}
       </a>
     ) : <span key={index}>{part}</span>
@@ -63,60 +75,71 @@ function ConfigForm({ config, onSave }) {
     }
   };
 
+  const labelStyle = { fontSize: '12px', fontWeight: 500, color: '#A7AEC4', display: 'block', marginBottom: '6px' };
+  const hintStyle = { fontSize: '11px', color: '#5A6180', marginTop: '4px' };
+
   return (
-    <form onSubmit={handleSubmit} className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-5">
+    <form onSubmit={handleSubmit} style={{ ...GLASS, padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <div>
-        <label className="text-xs text-slate-400">Assistant name</label>
+        <label style={labelStyle}>Assistant name</label>
         <input
           value={form.assistant_name}
           onChange={(e) => setForm((f) => ({ ...f, assistant_name: e.target.value }))}
           maxLength={80}
           required
-          className="mt-1.5 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
+          style={INPUT_STYLE}
+          onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
         />
       </div>
 
       <div>
-        <label className="text-xs text-slate-400">Greeting message</label>
+        <label style={labelStyle}>Greeting message</label>
         <textarea
           value={form.greeting_message}
           onChange={(e) => setForm((f) => ({ ...f, greeting_message: e.target.value }))}
           maxLength={500}
           required
           rows={2}
-          className="mt-1.5 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all resize-none"
+          style={{ ...INPUT_STYLE, resize: 'none' }}
+          onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
         />
-        <p className="text-[11px] text-slate-600 mt-1">Shown as the first message customers see.</p>
+        <p style={hintStyle}>Shown as the first message customers see.</p>
       </div>
 
       <div>
-        <label className="text-xs text-slate-400">Custom instructions (optional)</label>
+        <label style={labelStyle}>Custom instructions (optional)</label>
         <textarea
           value={form.custom_instructions || ''}
           onChange={(e) => setForm((f) => ({ ...f, custom_instructions: e.target.value }))}
           maxLength={4000}
           rows={4}
           placeholder="e.g. Always mention our 30-day return window when discussing refunds."
-          className="mt-1.5 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all resize-none"
+          style={{ ...INPUT_STYLE, resize: 'none' }}
+          onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
         />
-        <p className="text-[11px] text-slate-600 mt-1">
-          Extra tone or policy guidance layered on top of your knowledge base — this can't override
-          how the assistant handles security or grounding.
+        <p style={hintStyle}>
+          Extra tone or policy guidance layered on top of your knowledge base — this can't override how the assistant handles security or grounding.
         </p>
       </div>
 
       <div>
-        <label className="text-xs text-slate-400">Theme color</label>
-        <div className="mt-1.5 flex items-center gap-2">
+        <label style={labelStyle}>Theme color</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '4px' }}>
           {THEME_PRESETS.map((color) => (
             <button
               key={color}
               type="button"
               onClick={() => setForm((f) => ({ ...f, theme_color: color }))}
-              className={`w-7 h-7 rounded-full transition-all ${
-                form.theme_color === color ? 'ring-2 ring-offset-2 ring-offset-slate-900 ring-slate-200' : ''
-              }`}
-              style={{ backgroundColor: color }}
+              style={{
+                width: '28px', height: '28px', borderRadius: '50%', background: color, border: 'none', cursor: 'pointer',
+                outline: form.theme_color === color ? `3px solid ${color}` : 'none',
+                outlineOffset: '2px',
+                boxShadow: form.theme_color === color ? `0 0 10px ${color}60` : 'none',
+                transition: 'all 0.15s',
+              }}
               aria-label={`Use theme color ${color}`}
             />
           ))}
@@ -126,7 +149,7 @@ function ConfigForm({ config, onSave }) {
       <button
         type="submit"
         disabled={!dirty || saving}
-        className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        style={{ ...BTN_PRIMARY, opacity: !dirty || saving ? 0.4 : 1, cursor: !dirty || saving ? 'not-allowed' : 'pointer' }}
       >
         {saving ? 'Saving…' : 'Save changes'}
       </button>
@@ -215,18 +238,21 @@ function ActionReviewCard({
   };
 
   return (
-    <div className="rounded-xl border border-violet-600/30 bg-violet-600/[0.06] p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium text-violet-300">Review customer action</p>
-        <p className="text-[11px] text-emerald-400">Ready to create a case</p>
+    <div style={{
+      background: 'rgba(113,145,255,0.06)', border: '1px solid rgba(113,145,255,0.3)',
+      borderRadius: '14px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <p style={{ fontSize: '12px', fontWeight: 600, color: '#A8B7FF', margin: 0 }}>Review customer action</p>
+        <p style={{ fontSize: '11px', color: '#34D399', margin: 0 }}>Ready to create a case</p>
       </div>
 
-      <div className="rounded-lg border border-slate-800 bg-slate-950/60 p-3 text-xs">
-        <p className="text-[10px] uppercase tracking-wider text-slate-600">Requested outcome</p>
-        <p className="mt-1.5 whitespace-pre-wrap text-slate-200">
+      <div style={{ background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(180,195,255,0.08)', borderRadius: '10px', padding: '12px', fontSize: '12px' }}>
+        <p style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5A6180', margin: '0 0 6px' }}>Requested outcome</p>
+        <p style={{ fontSize: '13px', color: '#DCE5FF', whiteSpace: 'pre-wrap', margin: '0 0 10px' }}>
           {incident.fields?.issue_description || 'Customer follow-up requested'}
         </p>
-        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px 16px', fontSize: '11px', color: '#5A6180' }}>
           <span>Customer: {incident.fields?.customer_name || 'Not provided'}</span>
           {incident.fields?.order_reference && <span>Reference: {incident.fields.order_reference}</span>}
           {incident.fields?.customer_email && <span>Contact: {incident.fields.customer_email}</span>}
@@ -234,28 +260,32 @@ function ActionReviewCard({
       </div>
 
       {showEmail && (
-        <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/40 p-3">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] font-medium text-slate-300">Optional email</p>
-            <p className="text-[10px] text-slate-600">To: {incident.email_draft.to}</p>
+        <div style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid rgba(180,195,255,0.08)', borderRadius: '10px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <p style={{ fontSize: '12px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Optional email</p>
+            <p style={{ fontSize: '11px', color: '#5A6180', margin: 0 }}>To: {incident.email_draft.to}</p>
           </div>
           <div>
-            <label className="text-[11px] text-slate-500">Subject</label>
+            <label style={{ fontSize: '11px', color: '#5A6180', display: 'block', marginBottom: '4px' }}>Subject</label>
             <input
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
               maxLength={300}
-              className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
+              style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.12)', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', color: '#DCE5FF', outline: 'none' }}
+              onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
             />
           </div>
           <div>
-            <label className="text-[11px] text-slate-500">Body</label>
+            <label style={{ fontSize: '11px', color: '#5A6180', display: 'block', marginBottom: '4px' }}>Body</label>
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               rows={6}
               maxLength={8000}
-              className="mt-1 w-full rounded-lg bg-slate-900 border border-slate-700/60 px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all resize-none font-mono text-xs"
+              style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.12)', borderRadius: '8px', padding: '8px 12px', fontSize: '12px', fontFamily: 'monospace', color: '#DCE5FF', outline: 'none', resize: 'none' }}
+              onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.5)'}
+              onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
             />
           </div>
         </div>
@@ -263,11 +293,11 @@ function ActionReviewCard({
 
       {error && <ErrorMessage error={error} onDismiss={() => setError(null)} />}
 
-      <div className="flex flex-wrap gap-2">
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
         <button
           onClick={handleCreateTicket}
           disabled={sending || cancelling || creatingTicket}
-          className="rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-emerald-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          style={{ background: 'linear-gradient(135deg, #34D399, #059669)', border: 'none', borderRadius: '10px', padding: '8px 14px', fontSize: '12px', fontWeight: 600, color: '#fff', cursor: 'pointer', opacity: sending || cancelling || creatingTicket ? 0.4 : 1 }}
         >
           {creatingTicket ? 'Creating…' : 'Create case'}
         </button>
@@ -275,7 +305,7 @@ function ActionReviewCard({
           <button
             onClick={handleConfirm}
             disabled={sending || cancelling || creatingTicket || !subject.trim() || !body.trim()}
-            className="rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-medium text-white hover:bg-violet-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            style={{ ...BTN_PRIMARY, fontSize: '12px', padding: '8px 14px', opacity: sending || cancelling || creatingTicket || !subject.trim() || !body.trim() ? 0.4 : 1 }}
           >
             {sending ? 'Sending…' : 'Confirm & Send Email'}
           </button>
@@ -283,7 +313,7 @@ function ActionReviewCard({
           <button
             onClick={() => setShowEmail(true)}
             disabled={sending || cancelling || creatingTicket}
-            className="rounded-lg border border-violet-500/30 px-3.5 py-2 text-xs font-medium text-violet-300 hover:bg-violet-500/10 transition-colors disabled:opacity-40"
+            style={{ background: 'rgba(113,145,255,0.1)', border: '1px solid rgba(113,145,255,0.3)', borderRadius: '10px', padding: '8px 14px', fontSize: '12px', color: '#A8B7FF', cursor: 'pointer', opacity: sending || cancelling || creatingTicket ? 0.4 : 1 }}
           >
             Email this request
           </button>
@@ -291,12 +321,12 @@ function ActionReviewCard({
         <button
           onClick={handleCancel}
           disabled={sending || cancelling || creatingTicket}
-          className="rounded-lg border border-slate-700 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 transition-colors disabled:opacity-40"
+          style={{ ...BTN_GHOST, fontSize: '12px', padding: '8px 14px', opacity: sending || cancelling || creatingTicket ? 0.4 : 1 }}
         >
           {cancelling ? 'Cancelling…' : 'Cancel'}
         </button>
       </div>
-      <p className="text-[10px] text-slate-600">
+      <p style={{ fontSize: '11px', color: '#5A6180', margin: 0 }}>
         Nothing is emailed automatically. Create a case, or explicitly open and confirm the optional email.
       </p>
     </div>
@@ -342,55 +372,34 @@ function TestChat({ businessId, greeting, themeColor }) {
 
   const handleVoiceEvent = (event) => {
     switch (event.type) {
-      case 'transcript.partial':
-        setPartial(event.text);
-        break;
+      case 'transcript.partial': setPartial(event.text); break;
       case 'transcript.final':
         setPartial(null);
         setMessages((prev) => [...prev, { role: 'customer', content: event.text }]);
         break;
-      case 'agent.status':
-        setSending(event.status === 'processing');
-        break;
+      case 'agent.status': setSending(event.status === 'processing'); break;
       case 'agent.response':
         setMessages((prev) => [
           ...prev,
           { role: 'assistant', content: event.text, grounded: event.grounded, sources: event.sources },
         ]);
-        // Managed Voice Agent replies already arrive as natural PCM audio.
-        // The established voice path still uses browser speech synthesis.
         if (!event.audioManaged) speak(event.spoken_text || event.text);
         break;
-      case 'incident.update':
-        setActiveIncident(event.incident);
-        break;
+      case 'incident.update': setActiveIncident(event.incident); break;
       case 'ticket.update':
         setLatestTicket(event.ticket);
         setActiveIncident(null);
         break;
-      case 'voice.session':
-        setAssemblyaiSessionId(event.sessionId || null);
-        break;
+      case 'voice.session': setAssemblyaiSessionId(event.sessionId || null); break;
       case 'handoff.update':
         setLatestHandoff(event.handoff);
         setActiveIncident(null);
         break;
-      case 'agent.interrupted':
-        stopSpeech();
-        break;
-      case 'speech.started':
-        // Standard voice mode receives this before the backend finishes
-        // cancelling its previous turn, so stop browser TTS immediately.
-        stopSpeech();
-        break;
-      case 'voice.mode':
-        setVoiceMode(event.mode);
-        break;
-      case 'error':
-        setError(event.message || 'Voice session error.');
-        break;
-      default:
-        break;
+      case 'agent.interrupted': stopSpeech(); break;
+      case 'speech.started': stopSpeech(); break;
+      case 'voice.mode': setVoiceMode(event.mode); break;
+      case 'error': setError(event.message || 'Voice session error.'); break;
+      default: break;
     }
   };
 
@@ -415,12 +424,8 @@ function TestChat({ businessId, greeting, themeColor }) {
       await managedSession.start();
       setVoiceActive(true);
     } catch (err) {
-      // Reset/unmount may intentionally stop a connection while start() is
-      // still waiting for session.ready. Do not revive it via fallback.
       if (voiceSessionRef.current !== managedSession) return;
       managedSession.stop();
-      // The feature flag, account access, or provider may be unavailable.
-      // Fall back transparently to the voice implementation VERA already had.
       if (err instanceof VoiceAgentUnavailableError || err?.fallbackAllowed) {
         const wsUrl = `${BUSINESS_VOICE_WS_BASE}/ws/business-voice/test/${businessId}?session_id=${encodeURIComponent(sessionId)}`;
         const fallbackSession = createVoiceSession(handleVoiceEvent, wsUrl);
@@ -482,65 +487,70 @@ function TestChat({ businessId, greeting, themeColor }) {
   };
 
   return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900/60 flex flex-col h-[520px]">
-      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800/70">
-        <div className="flex items-center gap-2">
-          <h2 className="text-sm font-medium text-slate-200">Test your assistant</h2>
+    <div style={{ ...GLASS, display: 'flex', flexDirection: 'column', height: '520px' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid rgba(180,195,255,0.07)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: voiceActive ? '#34D399' : '#5A6180', transition: 'background 0.2s' }} />
+          <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: 0 }}>Test your assistant</h2>
           {voiceActive && (
-            <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-300">
+            <span style={{ padding: '2px 10px', borderRadius: '20px', fontSize: '10px', fontWeight: 600, color: '#34D399', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)' }}>
               {voiceMode === 'assemblyai-managed' ? 'AssemblyAI Voice Agent' : 'Standard voice'}
             </span>
           )}
         </div>
-        <button
-          onClick={reset}
-          className="text-xs text-slate-500 hover:text-slate-300 transition-colors"
+        <button onClick={reset} style={{ background: 'none', border: 'none', fontSize: '12px', color: '#5A6180', cursor: 'pointer', transition: 'color 0.15s' }}
+          onMouseEnter={(e) => e.currentTarget.style.color = '#DCE5FF'}
+          onMouseLeave={(e) => e.currentTarget.style.color = '#5A6180'}
         >
-          Reset conversation
+          Reset
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-        <div className="flex justify-start">
-          <div
-            className="max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-white"
-            style={{ backgroundColor: themeColor }}
-          >
+      {/* Messages */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        {/* Greeting */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+          <div style={{ maxWidth: '85%', borderRadius: '16px 16px 16px 4px', padding: '10px 14px', fontSize: '13px', color: '#fff', background: themeColor }}>
             {greeting}
           </div>
         </div>
+
         {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={
-                m.role === 'customer'
-                  ? 'max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-slate-800 text-slate-100'
-                  : 'max-w-[85%] rounded-2xl rounded-bl-sm px-4 py-2.5 text-sm text-white'
-              }
-              style={m.role === 'assistant' ? { backgroundColor: themeColor } : undefined}
-            >
-              <p className="whitespace-pre-wrap"><MessageContent>{m.content}</MessageContent></p>
+          <div key={i} style={{ display: 'flex', justifyContent: m.role === 'customer' ? 'flex-end' : 'flex-start' }}>
+            <div style={{
+              maxWidth: '85%',
+              borderRadius: m.role === 'customer' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+              padding: '10px 14px', fontSize: '13px',
+              color: m.role === 'customer' ? '#DCE5FF' : '#fff',
+              background: m.role === 'customer' ? 'rgba(255,255,255,0.08)' : themeColor,
+              border: m.role === 'customer' ? '1px solid rgba(180,195,255,0.1)' : 'none',
+            }}>
+              <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}><MessageContent>{m.content}</MessageContent></p>
               {m.role === 'assistant' && !m.grounded && (
-                <p className="text-[10px] text-white/70 mt-1.5">No matching info found</p>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '6px' }}>No matching info found</p>
               )}
               {m.role === 'assistant' && m.sources?.length > 0 && (
-                <p className="text-[10px] text-white/70 mt-1.5">Source: {m.sources.join(', ')}</p>
+                <p style={{ fontSize: '10px', color: 'rgba(255,255,255,0.6)', marginTop: '6px' }}>Source: {m.sources.join(', ')}</p>
               )}
             </div>
           </div>
         ))}
+
         {partial && (
-          <div className="flex justify-end">
-            <div className="max-w-[85%] rounded-2xl rounded-br-sm px-4 py-2.5 text-sm bg-slate-800/60 text-slate-400 italic">
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <div style={{ maxWidth: '85%', borderRadius: '16px 16px 4px 16px', padding: '10px 14px', fontSize: '13px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(180,195,255,0.08)', color: '#5A6180', fontStyle: 'italic' }}>
               {partial}
             </div>
           </div>
         )}
+
         {sending && (
-          <div className="flex justify-start">
+          <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
             <LoadingIndicator label="Thinking…" />
           </div>
         )}
+
         {activeIncident?.status === 'ready_for_review' && (
           <ActionReviewCard
             businessId={businessId}
@@ -554,55 +564,61 @@ function TestChat({ businessId, greeting, themeColor }) {
             }}
           />
         )}
+
         {latestTicket && (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/[0.07] px-4 py-3" role="status">
-            <p className="text-xs font-medium text-emerald-300">Case {latestTicket.ticket_number} created</p>
-            <p className="mt-1 text-[11px] capitalize text-slate-500">
+          <div style={{ background: 'rgba(52,211,153,0.07)', border: '1px solid rgba(52,211,153,0.3)', borderRadius: '12px', padding: '12px 16px' }} role="status">
+            <p style={{ fontSize: '12px', fontWeight: 600, color: '#34D399', margin: '0 0 4px' }}>Case {latestTicket.ticket_number} created</p>
+            <p style={{ fontSize: '11px', color: '#5A6180', textTransform: 'capitalize', margin: 0 }}>
               {latestTicket.priority} priority · {latestTicket.category} · {latestTicket.status.replaceAll('_', ' ')}
             </p>
           </div>
         )}
+
         {latestHandoff && (
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.07] px-4 py-3" role="status">
-            <p className="text-xs font-medium text-amber-300">Human follow-up requested</p>
-            <p className="mt-1 text-[11px] text-slate-500">
+          <div style={{ background: 'rgba(251,191,36,0.07)', border: '1px solid rgba(251,191,36,0.3)', borderRadius: '12px', padding: '12px 16px' }} role="status">
+            <p style={{ fontSize: '12px', fontWeight: 600, color: '#FBBF24', margin: '0 0 4px' }}>Human follow-up requested</p>
+            <p style={{ fontSize: '11px', color: '#5A6180', margin: 0 }}>
               The business can see this conversation and escalation in the Action Center.
             </p>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
       {error && (
-        <div className="px-5 pb-2">
+        <div style={{ padding: '0 16px 8px' }}>
           <ErrorMessage error={error} onDismiss={() => setError(null)} />
         </div>
       )}
 
-      <form onSubmit={handleSend} className="flex gap-2 px-5 py-3 border-t border-slate-800/70">
+      {/* Input */}
+      <form onSubmit={handleSend} style={{ display: 'flex', gap: '8px', padding: '12px 16px', borderTop: '1px solid rgba(180,195,255,0.07)' }}>
         <button
           type="button"
           onClick={toggleVoice}
           title={voiceActive ? 'Stop voice' : 'Speak to test the assistant'}
-          className={
-            'rounded-lg px-3 py-2.5 text-sm font-medium transition-colors shrink-0 ' +
-            (voiceActive
-              ? 'bg-red-600 text-white hover:bg-red-500'
-              : 'bg-slate-800 text-slate-300 hover:bg-slate-700')
-          }
+          style={{
+            flexShrink: 0, borderRadius: '10px', padding: '9px 12px', fontSize: '14px', border: 'none', cursor: 'pointer',
+            background: voiceActive ? '#EF4444' : 'rgba(255,255,255,0.08)',
+            color: voiceActive ? '#fff' : '#A7AEC4',
+            transition: 'all 0.15s',
+          }}
         >
-          {voiceActive ? '⏹ Stop' : '🎤'}
+          {voiceActive ? '⏹' : '🎤'}
         </button>
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Ask as a customer would…"
-          className="flex-1 rounded-lg bg-slate-900 border border-slate-700/60 px-3.5 py-2.5 text-sm text-slate-100 placeholder-slate-600 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
+          style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.12)', borderRadius: '10px', padding: '9px 14px', fontSize: '13px', color: '#DCE5FF', outline: 'none' }}
+          onFocus={(e) => e.target.style.borderColor = 'rgba(113,145,255,0.4)'}
+          onBlur={(e) => e.target.style.borderColor = 'rgba(180,195,255,0.12)'}
         />
         <button
           type="submit"
           disabled={sending || !input.trim()}
-          className="rounded-lg bg-violet-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-violet-500 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          style={{ ...BTN_PRIMARY, flexShrink: 0, opacity: sending || !input.trim() ? 0.4 : 1, cursor: sending || !input.trim() ? 'not-allowed' : 'pointer' }}
         >
           Send
         </button>
@@ -613,7 +629,7 @@ function TestChat({ businessId, greeting, themeColor }) {
 
 export default function CustomizeAssistant() {
   const { business } = useBusiness();
-  const [config, setConfig] = useState(undefined); // undefined = loading
+  const [config, setConfig] = useState(undefined);
   const [loadError, setLoadError] = useState(null);
   const businessId = business?.id;
 
@@ -628,9 +644,7 @@ export default function CustomizeAssistant() {
     }
   }, [businessId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   const handleSave = async (updates) => {
     const updated = await updateAssistantConfig(businessId, updates);
@@ -638,25 +652,22 @@ export default function CustomizeAssistant() {
   };
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-slate-100">Customize Assistant</h1>
-      <p className="text-sm text-slate-500 mt-1">
-        Set your assistant's name, greeting, and tone, then try it out live using your uploaded
-        knowledge base.
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF' }}>
+      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>
+        Customize Assistant
+      </h1>
+      <p style={{ fontSize: '13px', color: '#5A6180', marginBottom: '24px' }}>
+        Set your assistant's name, greeting, and tone, then try it out live using your uploaded knowledge base.
       </p>
 
-      {loadError && (
-        <div className="mt-6">
-          <ErrorMessage error={loadError} onDismiss={() => setLoadError(null)} />
-        </div>
-      )}
+      {loadError && <div style={{ marginBottom: '16px' }}><ErrorMessage error={loadError} onDismiss={() => setLoadError(null)} /></div>}
 
       {config === undefined ? (
-        <div className="flex justify-center py-14">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '56px 0' }}>
           <LoadingIndicator label="Loading assistant…" />
         </div>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-2 max-w-5xl">
+        <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', maxWidth: '900px' }}>
           <ConfigForm config={config} onSave={handleSave} />
           <TestChat businessId={businessId} greeting={config.greeting_message} themeColor={config.theme_color} />
         </div>
