@@ -409,6 +409,9 @@
     playbackTime: 0,
     playbackSources: [],
     pendingTools: {},
+    seenUserItemIds: Object.create(null),
+    seenAgentReplyIds: Object.create(null),
+    seenToolCallIds: Object.create(null),
     lastTurnEvent: null,
     lastToolResult: null,
     greeting: "",
@@ -419,6 +422,14 @@
     callStartedAt: null,
     timerId: null,
   };
+
+  function alreadyHandledManaged(store, value) {
+    if (value === undefined || value === null || value === "") return false;
+    var id = String(value);
+    if (store[id]) return true;
+    store[id] = true;
+    return false;
+  }
 
   function updateCallTimer() {
     if (!voiceState.callStartedAt) return;
@@ -486,6 +497,9 @@
     voiceState.stream = null;
     voiceState.mode = null;
     voiceState.pendingTools = {};
+    voiceState.seenUserItemIds = Object.create(null);
+    voiceState.seenAgentReplyIds = Object.create(null);
+    voiceState.seenToolCallIds = Object.create(null);
     voiceState.lastTurnEvent = null;
     voiceState.lastToolResult = null;
     voiceState.providerSessionId = null;
@@ -628,10 +642,12 @@
         playManagedAudio(event.data);
       }
     } else if (event.type === "transcript.user") {
+      if (alreadyHandledManaged(voiceState.seenUserItemIds, event.item_id)) return;
       voiceState.latestUserTranscript = event.text || "";
       showCallStatus("Processing request");
       addMessage("customer", event.text).style.background = themeColor;
     } else if (event.type === "tool.call") {
+      if (alreadyHandledManaged(voiceState.seenToolCallIds, event.call_id)) return;
       queueManagedTool(event);
     } else if (event.type === "reply.started" || event.type === "input.speech.started") {
       voiceState.lastTurnEvent = event.type;
@@ -644,6 +660,8 @@
         showCallStatus("Preparing response");
       }
     } else if (event.type === "transcript.agent") {
+      var agentReplyId = event.reply_id || event.item_id;
+      if (alreadyHandledManaged(voiceState.seenAgentReplyIds, agentReplyId)) return;
       var isGreeting = voiceState.greeting &&
         String(event.text || "").trim().toLowerCase() === voiceState.greeting.trim().toLowerCase();
       voiceState.greeting = "";

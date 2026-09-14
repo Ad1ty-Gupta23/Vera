@@ -221,6 +221,7 @@ async def voice_session(client_ws: WebSocket):
     # human: the mic never has to be re-armed, and speaking over VERA cuts
     # its current turn short instead of queuing behind it.
     current_task: dict[str, asyncio.Task | None] = {"task": None}
+    seen_final_turns: set[int | str] = set()
 
     async def forward_transcripts():
         """Forward AssemblyAI transcript events to the client."""
@@ -231,6 +232,13 @@ async def voice_session(client_ws: WebSocket):
                 event = parse_assemblyai_event(raw)
                 if not event:
                     continue
+
+                if event["type"] == "transcript.final":
+                    turn_id = event.get("turn_id")
+                    if turn_id is not None:
+                        if turn_id in seen_final_turns:
+                            continue
+                        seen_final_turns.add(turn_id)
 
                 await client_ws.send_json(event)
 
@@ -420,6 +428,7 @@ async def _business_voice_loop(
 
     transcript_queue: asyncio.Queue = asyncio.Queue()
     current_task: dict[str, asyncio.Task | None] = {"task": None}
+    seen_final_turns: set[int | str] = set()
 
     async def forward_transcripts():
         if aai_ws is None:
@@ -429,6 +438,12 @@ async def _business_voice_loop(
                 event = parse_assemblyai_event(raw)
                 if not event:
                     continue
+                if event["type"] == "transcript.final":
+                    turn_id = event.get("turn_id")
+                    if turn_id is not None:
+                        if turn_id in seen_final_turns:
+                            continue
+                        seen_final_turns.add(turn_id)
                 await client_ws.send_json(event)
                 if event["type"] == "speech.started":
                     task = current_task["task"]

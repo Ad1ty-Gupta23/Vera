@@ -1,3 +1,4 @@
+import json
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,6 +12,23 @@ from app.db.session import get_db
 from app.models.assistant import AssistantConfig
 from app.models.business import Business
 from app.services import voice_agent
+from app.services.assemblyai import parse_assemblyai_event
+
+
+class AssemblyAIStreamingEventTests(unittest.TestCase):
+    def test_final_transcript_preserves_stable_turn_id(self):
+        event = parse_assemblyai_event(json.dumps({
+            "type": "Turn",
+            "turn_order": 0,
+            "end_of_turn": True,
+            "transcript": "Where is my order?",
+        }))
+
+        self.assertEqual(event, {
+            "type": "transcript.final",
+            "text": "Where is my order?",
+            "turn_id": 0,
+        })
 
 
 class VoiceAgentConfigTests(unittest.TestCase):
