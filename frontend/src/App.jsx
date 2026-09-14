@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext';
 import { BusinessProvider } from './context/BusinessContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import BusinessLayout from './layouts/BusinessLayout';
+import Landing from './pages/Landing';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import SubscriptionSelect from './pages/business/SubscriptionSelect';
@@ -23,12 +24,16 @@ import SupportDesk from './pages/business/SupportDesk';
 // just now mounted behind auth, at /dashboard, instead of being the only
 // route in the app. Business-tier routes (onboarding, business dashboard,
 // etc.) are added alongside this block without touching it (Stage 3).
+// Stage 4 — added public Landing page at "/" with auth-aware redirect.
 function App() {
   return (
     <BrowserRouter>
       <ToastProvider>
         <AuthProvider>
           <Routes>
+            {/* Public landing page */}
+            <Route path="/" element={<Landing />} />
+
             <Route path="/login" element={<Login />} />
             <Route
               path="/dashboard"
@@ -90,8 +95,8 @@ function App() {
               <Route path="settings" element={<BusinessSettings />} />
             </Route>
 
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="*" element={<Navigate to="/dashboard" replace />} />
+            {/* Catch-all: send unknown routes to landing */}
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
       </ToastProvider>

@@ -6,16 +6,11 @@ import FormField from '../../components/common/FormField';
 import LoadingIndicator from '../../components/common/LoadingIndicator';
 
 const EMPTY_FORM = {
-  name: '',
-  description: '',
-  category: '',
-  website: '',
-  contact_email: '',
-  phone: '',
-  address: '',
-  helpdesk_email: '',
-  working_hours: '',
+  name: '', description: '', category: '', website: '',
+  contact_email: '', phone: '', address: '', helpdesk_email: '', working_hours: '',
 };
+
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '16px' };
 
 function ConfirmationScreen() {
   const navigate = useNavigate();
@@ -30,31 +25,55 @@ function ConfirmationScreen() {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md text-center">
-        <div className="w-14 h-14 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center mx-auto mb-5">
-          <svg className="w-6 h-6 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <div style={{
+      minHeight: '100vh', background: '#080B18', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '24px', fontFamily: "'Inter', system-ui, sans-serif",
+    }}>
+      <div style={{ width: '100%', maxWidth: '420px', textAlign: 'center' }}>
+        {/* Success icon */}
+        <div style={{
+          width: '64px', height: '64px', borderRadius: '50%',
+          background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px',
+        }}>
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#34D399" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </div>
-        <h1 className="text-xl font-semibold">Your business AI assistant is ready</h1>
-        <p className="text-sm text-slate-400 mt-2">
+
+        <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '24px', fontWeight: 700, color: '#fff', margin: '0 0 10px' }}>
+          Your business AI assistant is ready
+        </h1>
+        <p style={{ fontSize: '14px', color: '#5A6180', marginBottom: '32px' }}>
           You can manage its knowledge base, appearance, and integrations from your dashboard.
         </p>
 
-        <div className="mt-8 flex flex-col gap-2.5">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {actions.map((a) => (
             <button
               key={a.label}
               onClick={() => navigate(a.to)}
-              className="w-full flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-200 hover:border-slate-700 hover:bg-slate-900 transition-all text-left"
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                ...GLASS, padding: '14px 18px',
+                fontSize: '14px', color: '#DCE5FF', cursor: 'pointer',
+                textAlign: 'left', transition: 'all 0.2s',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(113,145,255,0.08)'; e.currentTarget.style.borderColor = 'rgba(113,145,255,0.3)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.borderColor = 'rgba(180,195,255,0.1)'; }}
             >
               <span>{a.label}</span>
               {!a.ready && (
-                <span className="text-[10px] uppercase tracking-wide text-slate-500 border border-slate-700 rounded-full px-2 py-0.5">
+                <span style={{
+                  fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.08em',
+                  color: '#5A6180', border: '1px solid rgba(180,195,255,0.15)', borderRadius: '20px', padding: '2px 8px',
+                }}>
                   coming soon
                 </span>
               )}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5A6180" strokeWidth="2">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </button>
           ))}
         </div>
@@ -73,23 +92,15 @@ export default function BusinessOnboarding() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div style={{ minHeight: '100vh', background: '#080B18', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <LoadingIndicator label="Loading…" />
       </div>
     );
   }
 
-  if (plan !== 'business') {
-    return <Navigate to="/subscribe" replace />;
-  }
-
-  if (business && !justCreated) {
-    return <Navigate to="/business/overview" replace />;
-  }
-
-  if (justCreated) {
-    return <ConfirmationScreen />;
-  }
+  if (plan !== 'business') return <Navigate to="/subscribe" replace />;
+  if (business && !justCreated) return <Navigate to="/business/overview" replace />;
+  if (justCreated) return <ConfirmationScreen />;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -109,7 +120,6 @@ export default function BusinessOnboarding() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validate()) return;
-
     setSubmitting(true);
     try {
       const payload = Object.fromEntries(
@@ -125,106 +135,80 @@ export default function BusinessOnboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 px-4 py-12">
-      <div className="max-w-2xl mx-auto">
-        <h1 className="text-2xl font-semibold">Set up your business assistant</h1>
-        <p className="text-slate-400 text-sm mt-1.5">
-          Tell us about your business. You can add your knowledge base and connect Gmail
-          afterward.
-        </p>
-
-        <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-5">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <FormField
-              label="Business name"
-              name="name"
-              value={form.name}
-              onChange={handleChange}
-              required
-              error={fieldErrors.name}
-              placeholder="Acme Corp"
-            />
-            <FormField
-              label="Category"
-              name="category"
-              value={form.category}
-              onChange={handleChange}
-              placeholder="E-commerce, SaaS, Retail…"
-            />
+    <div style={{
+      minHeight: '100vh', background: '#080B18', padding: '48px 24px',
+      fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF',
+    }}>
+      <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+        {/* Header */}
+        <div style={{ marginBottom: '32px' }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: '8px',
+            background: 'rgba(113,145,255,0.1)', border: '1px solid rgba(113,145,255,0.25)',
+            borderRadius: '20px', padding: '4px 14px', fontSize: '12px', color: '#A8B7FF', marginBottom: '16px',
+          }}>
+            <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7191FF' }} />
+            Business Plan
           </div>
+          <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '28px', fontWeight: 700, color: '#fff', margin: '0 0 8px' }}>
+            Set up your business assistant
+          </h1>
+          <p style={{ fontSize: '14px', color: '#5A6180' }}>
+            Tell us about your business. You can add your knowledge base and connect Gmail afterward.
+          </p>
+        </div>
 
-          <FormField
-            label="Description"
-            name="description"
-            as="textarea"
-            value={form.description}
-            onChange={handleChange}
-            placeholder="A short description of what your business does — this helps the assistant introduce itself accurately."
-          />
+        {/* Form card */}
+        <div style={{ ...GLASS, padding: '28px' }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: '1fr 1fr' }}>
+              <FormField label="Business name" name="name" value={form.name} onChange={handleChange} required error={fieldErrors.name} placeholder="Acme Corp" />
+              <FormField label="Category" name="category" value={form.category} onChange={handleChange} placeholder="E-commerce, SaaS, Retail…" />
+            </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
             <FormField
-              label="Website"
-              name="website"
-              value={form.website}
+              label="Description" name="description" as="textarea" value={form.description}
               onChange={handleChange}
-              placeholder="https://example.com"
+              placeholder="A short description of what your business does — this helps the assistant introduce itself accurately."
             />
+
+            <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: '1fr 1fr' }}>
+              <FormField label="Website" name="website" value={form.website} onChange={handleChange} placeholder="https://example.com" />
+              <FormField label="Working hours" name="working_hours" value={form.working_hours} onChange={handleChange} placeholder="Mon–Fri, 9am–6pm" />
+            </div>
+
+            <div style={{ display: 'grid', gap: '20px', gridTemplateColumns: '1fr 1fr' }}>
+              <FormField label="Contact email" name="contact_email" type="email" value={form.contact_email} onChange={handleChange} placeholder="hello@example.com" />
+              <FormField label="Phone number" name="phone" value={form.phone} onChange={handleChange} placeholder="+1 555 000 0000" />
+            </div>
+
+            <FormField label="Address" name="address" value={form.address} onChange={handleChange} placeholder="123 Main St, City, Country" />
+
             <FormField
-              label="Working hours"
-              name="working_hours"
-              value={form.working_hours}
-              onChange={handleChange}
-              placeholder="Mon–Fri, 9am–6pm"
+              label="Action inbox email" name="helpdesk_email" type="email" value={form.helpdesk_email}
+              onChange={handleChange} required error={fieldErrors.helpdesk_email}
+              hint="Optional confirmed email follow-ups will be sent here once Gmail is connected."
+              placeholder="actions@example.com"
             />
-          </div>
 
-          <div className="grid gap-5 sm:grid-cols-2">
-            <FormField
-              label="Contact email"
-              name="contact_email"
-              type="email"
-              value={form.contact_email}
-              onChange={handleChange}
-              placeholder="hello@example.com"
-            />
-            <FormField
-              label="Phone number"
-              name="phone"
-              value={form.phone}
-              onChange={handleChange}
-              placeholder="+1 555 000 0000"
-            />
-          </div>
+            {/* Divider */}
+            <div style={{ height: '1px', background: 'rgba(180,195,255,0.08)' }} />
 
-          <FormField
-            label="Address"
-            name="address"
-            value={form.address}
-            onChange={handleChange}
-            placeholder="123 Main St, City, Country"
-          />
-
-          <FormField
-            label="Action inbox email"
-            name="helpdesk_email"
-            type="email"
-            value={form.helpdesk_email}
-            onChange={handleChange}
-            required
-            error={fieldErrors.helpdesk_email}
-            hint="Optional confirmed email follow-ups will be sent here once Gmail is connected."
-            placeholder="actions@example.com"
-          />
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="mt-2 w-full rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-medium text-white transition-all"
-          >
-            {submitting ? 'Creating your assistant…' : 'Create business assistant'}
-          </button>
-        </form>
+            <button
+              type="submit"
+              disabled={submitting}
+              style={{
+                background: submitting ? 'rgba(113,145,255,0.3)' : 'linear-gradient(135deg, #7191FF, #9B8CFF)',
+                border: 'none', borderRadius: '12px',
+                padding: '13px 24px', fontSize: '15px', fontWeight: 600, color: '#fff',
+                cursor: submitting ? 'not-allowed' : 'pointer', transition: 'all 0.2s',
+                width: '100%',
+              }}
+            >
+              {submitting ? 'Creating your assistant…' : 'Create business assistant'}
+            </button>
+          </form>
+        </div>
       </div>
     </div>
   );

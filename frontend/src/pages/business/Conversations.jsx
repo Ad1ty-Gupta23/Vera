@@ -5,8 +5,10 @@ import LoadingIndicator from '../../components/common/LoadingIndicator';
 import ErrorMessage from '../../components/common/ErrorMessage';
 import { listConversations, getConversation } from '../../services/conversations';
 
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '14px' };
+
 function formatRelative(iso) {
-  const date = new Date(iso + 'Z'); // backend sends naive UTC timestamps
+  const date = new Date(iso + 'Z');
   const diffMs = Date.now() - date.getTime();
   const mins = Math.round(diffMs / 60000);
   if (mins < 1) return 'just now';
@@ -21,37 +23,42 @@ function ConversationRow({ conversation, active, onClick }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3 border-b border-slate-800/70 last:border-b-0 transition-colors ${
-        active ? 'bg-violet-600/10' : 'hover:bg-slate-900'
-      }`}
+      style={{
+        width: '100%', textAlign: 'left', padding: '13px 16px',
+        borderBottom: '1px solid rgba(180,195,255,0.06)',
+        background: active ? 'rgba(113,145,255,0.1)' : 'transparent',
+        border: 'none',
+        borderLeft: active ? '2px solid #7191FF' : '2px solid transparent',
+        cursor: 'pointer', transition: 'all 0.15s',
+      }}
+      onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+      onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = 'transparent'; }}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-sm text-slate-200 truncate">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px' }}>
+        <p style={{ fontSize: '13px', color: '#DCE5FF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: 0, fontWeight: active ? 600 : 400 }}>
           Conversation #{conversation.id}
         </p>
-        <span
-          className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border ${
-            conversation.status === 'open'
-              ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20'
-              : 'text-slate-400 bg-slate-500/10 border-slate-500/20'
-          }`}
-        >
+        <span style={{
+          fontSize: '10px', padding: '2px 8px', borderRadius: '20px', flexShrink: 0,
+          color: conversation.status === 'open' ? '#34D399' : '#A7AEC4',
+          background: conversation.status === 'open' ? 'rgba(52,211,153,0.1)' : 'rgba(255,255,255,0.05)',
+          border: `1px solid ${conversation.status === 'open' ? 'rgba(52,211,153,0.25)' : 'rgba(180,195,255,0.1)'}`,
+        }}>
           {conversation.status}
         </span>
       </div>
-      <p className="text-xs text-slate-500 truncate mt-0.5">
+      <p style={{ fontSize: '11px', color: '#5A6180', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', margin: '0 0 4px' }}>
         {conversation.last_message_preview || 'No messages yet'}
       </p>
-      <p className="text-[11px] text-slate-600 mt-1">
-        {conversation.message_count} message{conversation.message_count === 1 ? '' : 's'} ·{' '}
-        {formatRelative(conversation.last_message_at)}
+      <p style={{ fontSize: '11px', color: '#3D4461', margin: 0 }}>
+        {conversation.message_count} message{conversation.message_count === 1 ? '' : 's'} · {formatRelative(conversation.last_message_at)}
       </p>
     </button>
   );
 }
 
 function ConversationDetail({ businessId, conversationId }) {
-  const [detail, setDetail] = useState(undefined); // undefined = loading
+  const [detail, setDetail] = useState(undefined);
   const [error, setError] = useState(null);
 
   useEffect(() => {
@@ -67,33 +74,33 @@ function ConversationDetail({ businessId, conversationId }) {
   if (error) return <ErrorMessage error={error} />;
   if (detail === undefined) {
     return (
-      <div className="flex justify-center py-14">
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
         <LoadingIndicator label="Loading conversation…" />
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-5 py-3 border-b border-slate-800/70">
-        <h2 className="text-sm font-medium text-slate-200">Conversation #{detail.id}</h2>
-        <p className="text-xs text-slate-500 mt-0.5">
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(180,195,255,0.08)' }}>
+        <h2 style={{ fontSize: '13px', fontWeight: 600, color: '#DCE5FF', margin: '0 0 3px' }}>Conversation #{detail.id}</h2>
+        <p style={{ fontSize: '11px', color: '#5A6180', margin: 0 }}>
           Started {formatRelative(detail.started_at)} · session {detail.session_id}
         </p>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
         {detail.messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === 'customer' ? 'justify-end' : 'justify-start'}`}>
-            <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm ${
-                m.role === 'customer'
-                  ? 'rounded-br-sm bg-slate-800 text-slate-100'
-                  : 'rounded-bl-sm bg-violet-600/90 text-white'
-              }`}
-            >
-              <p className="whitespace-pre-wrap">{m.content}</p>
+          <div key={m.id} style={{ display: 'flex', justifyContent: m.role === 'customer' ? 'flex-end' : 'flex-start' }}>
+            <div style={{
+              maxWidth: '85%', borderRadius: m.role === 'customer' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+              padding: '10px 14px', fontSize: '13px',
+              background: m.role === 'customer' ? 'rgba(113,145,255,0.15)' : 'rgba(155,140,255,0.15)',
+              border: `1px solid ${m.role === 'customer' ? 'rgba(113,145,255,0.25)' : 'rgba(155,140,255,0.2)'}`,
+              color: '#DCE5FF',
+            }}>
+              <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{m.content}</p>
               {m.role === 'assistant' && m.grounded === false && (
-                <p className="text-[10px] text-white/70 mt-1.5">No matching info found</p>
+                <p style={{ fontSize: '10px', color: 'rgba(251,191,36,0.7)', marginTop: '6px' }}>No matching info found</p>
               )}
             </div>
           </div>
@@ -107,7 +114,7 @@ export default function Conversations() {
   const { business } = useBusiness();
   const businessId = business?.id;
 
-  const [conversations, setConversations] = useState(undefined); // undefined = loading
+  const [conversations, setConversations] = useState(undefined);
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
 
@@ -124,38 +131,31 @@ export default function Conversations() {
     }
   }, [businessId]);
 
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
+  useEffect(() => { refresh(); }, [refresh]);
 
   return (
-    <div>
-      <h1 className="text-xl font-semibold text-slate-100">Conversations</h1>
-      <p className="text-sm text-slate-500 mt-1">
-        Review customer conversations handled by your assistant, including test conversations run
-        from Customize Assistant.
+    <div style={{ fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF' }}>
+      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>
+        Conversations
+      </h1>
+      <p style={{ fontSize: '13px', color: '#5A6180', marginBottom: '24px' }}>
+        Review customer conversations handled by your assistant, including test conversations run from Customize Assistant.
       </p>
 
-      {error && (
-        <div className="mt-6">
-          <ErrorMessage error={error} onDismiss={() => setError(null)} />
-        </div>
-      )}
+      {error && <div style={{ marginBottom: '16px' }}><ErrorMessage error={error} onDismiss={() => setError(null)} /></div>}
 
       {conversations === undefined ? (
-        <div className="flex justify-center py-14">
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '56px 0' }}>
           <LoadingIndicator label="Loading conversations…" />
         </div>
       ) : conversations.length === 0 ? (
-        <div className="mt-6">
-          <EmptyState
-            title="No conversations yet"
-            description="Once customers start chatting with your assistant — or you try it from Customize Assistant — conversations will show up here."
-          />
-        </div>
+        <EmptyState
+          title="No conversations yet"
+          description="Once customers start chatting with your assistant — or you try it from Customize Assistant — conversations will show up here."
+        />
       ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[320px_1fr] max-w-5xl h-[600px]">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-y-auto">
+        <div style={{ display: 'grid', gap: '16px', gridTemplateColumns: '300px 1fr', maxWidth: '900px', height: '580px' }}>
+          <div style={{ ...GLASS, overflowY: 'auto', padding: 0 }}>
             {conversations.map((c) => (
               <ConversationRow
                 key={c.id}
@@ -165,7 +165,7 @@ export default function Conversations() {
               />
             ))}
           </div>
-          <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+          <div style={{ ...GLASS, overflow: 'hidden', padding: 0 }}>
             {selectedId != null && (
               <ConversationDetail businessId={businessId} conversationId={selectedId} />
             )}

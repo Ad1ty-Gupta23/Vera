@@ -5,6 +5,8 @@ import { useBusiness } from '../../context/BusinessContext';
 import { useToast } from '../../context/ToastContext';
 import { selectPlan } from '../../services/business';
 
+const GLASS = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(180,195,255,0.1)', borderRadius: '16px' };
+
 export default function SubscriptionSettings() {
   const { user, refreshUser } = useAuth();
   const { subscription, refresh } = useBusiness();
@@ -28,36 +30,59 @@ export default function SubscriptionSettings() {
   };
 
   return (
-    <div className="max-w-xl">
-      <h1 className="text-xl font-semibold text-slate-100">Subscription</h1>
-      <p className="text-sm text-slate-500 mt-1">
+    <div style={{ maxWidth: '520px', fontFamily: "'Inter', system-ui, sans-serif", color: '#DCE5FF' }}>
+      <h1 style={{ fontFamily: "'Space Grotesk', sans-serif", fontSize: '22px', fontWeight: 700, color: '#fff', margin: '0 0 6px' }}>
+        Subscription
+      </h1>
+      <p style={{ fontSize: '13px', color: '#5A6180', marginBottom: '24px' }}>
         Manage your plan. Real payment collection isn't wired up yet — see the note below.
       </p>
 
-      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-5">
-        <div className="flex items-center justify-between">
+      <div style={{ ...GLASS, padding: '24px' }}>
+        {/* Current plan */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <div>
-            <p className="text-xs text-slate-500">Current plan</p>
-            <p className="text-lg font-medium text-slate-100 mt-0.5 capitalize">
+            <p style={{ fontSize: '11px', color: '#5A6180', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px' }}>
+              Current plan
+            </p>
+            <p style={{ fontSize: '22px', fontWeight: 700, color: '#fff', margin: 0, fontFamily: "'Space Grotesk', sans-serif", textTransform: 'capitalize' }}>
               {user?.plan || 'free'}
             </p>
           </div>
-          <span className="text-xs rounded-full border border-emerald-800 bg-emerald-950/60 text-emerald-300 px-2.5 py-1">
+          <span style={{
+            borderRadius: '20px', padding: '4px 14px', fontSize: '12px', fontWeight: 600,
+            color: '#34D399', background: 'rgba(52,211,153,0.1)', border: '1px solid rgba(52,211,153,0.25)',
+          }}>
             {subscription?.status || 'active'}
           </span>
         </div>
 
-        <p className="text-xs text-amber-400/80 mt-4 leading-relaxed">
-          No payment provider (Stripe, etc.) is connected yet, so this reflects a plan flag only
-          — no card has been charged. When billing is added, this page will show renewal dates
-          and an invoice history sourced from the provider instead.
-        </p>
+        {/* Divider */}
+        <div style={{ height: '1px', background: 'rgba(180,195,255,0.08)', margin: '16px 0' }} />
+
+        {/* Note */}
+        <div style={{
+          padding: '12px 14px', borderRadius: '10px',
+          background: 'rgba(251,191,36,0.06)', border: '1px solid rgba(251,191,36,0.2)',
+          marginBottom: '20px',
+        }}>
+          <p style={{ fontSize: '12px', color: 'rgba(251,191,36,0.85)', lineHeight: '1.6', margin: 0 }}>
+            No payment provider (Stripe, etc.) is connected yet, so this reflects a plan flag only — no card has been charged. When billing is added, this page will show renewal dates and an invoice history sourced from the provider instead.
+          </p>
+        </div>
 
         {user?.plan === 'business' && (
           <button
             onClick={handleDowngrade}
             disabled={submitting}
-            className="mt-5 text-sm text-slate-400 hover:text-slate-200 underline disabled:opacity-50"
+            style={{
+              background: 'none', border: 'none', padding: 0,
+              fontSize: '13px', color: '#5A6180', cursor: submitting ? 'not-allowed' : 'pointer',
+              textDecoration: 'underline', opacity: submitting ? 0.5 : 1,
+              transition: 'color 0.15s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#DCE5FF'}
+            onMouseLeave={(e) => e.currentTarget.style.color = '#5A6180'}
           >
             {submitting ? 'Switching…' : 'Switch to Free plan'}
           </button>
