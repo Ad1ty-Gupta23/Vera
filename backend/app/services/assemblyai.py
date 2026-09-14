@@ -40,8 +40,19 @@ def parse_assemblyai_event(raw: str) -> dict | None:
         if not text:
             return None
         if msg.get("end_of_turn"):
-            return {"type": "transcript.final", "text": text}
-        return {"type": "transcript.partial", "text": text}
+            return {
+                "type": "transcript.final",
+                "text": text,
+                # AssemblyAI keeps this stable for all deliveries belonging
+                # to the same turn. Preserve it so callers can make final
+                # transcript handling idempotent.
+                "turn_id": msg.get("turn_order"),
+            }
+        return {
+            "type": "transcript.partial",
+            "text": text,
+            "turn_id": msg.get("turn_order"),
+        }
 
     # v3 sends "SpeechStarted" the instant it detects the user has begun
     # talking — this fires *before* any Turn text arrives, which makes it the
