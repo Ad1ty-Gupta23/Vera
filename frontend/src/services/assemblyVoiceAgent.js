@@ -70,6 +70,20 @@ export function createAssemblyVoiceAgentSession(
   let latestUserTranscript = '';
   const playbackSources = new Set();
   const pendingTools = new Map();
+  const seenUserItemIds = new Set();
+  const seenAgentReplyIds = new Set();
+  const seenToolCallIds = new Set();
+
+  function alreadyHandled(ids, value) {
+    if (value === undefined || value === null || value === '') return false;
+    const id = String(value);
+    if (ids.has(id)) return true;
+    ids.add(id);
+    // Sessions are bounded, but keep the guard bounded too in case a browser
+    // tab remains connected for an unusually long time.
+    if (ids.size > 500) ids.delete(ids.values().next().value);
+    return false;
+  }
 
   function reportCallEnd() {
     if (!providerSessionId || callEndReported) return;
@@ -116,6 +130,9 @@ export function createAssemblyVoiceAgentSession(
     ready = false;
     suppressReplyAudio = false;
     pendingTools.clear();
+    seenUserItemIds.clear();
+    seenAgentReplyIds.clear();
+    seenToolCallIds.clear();
     cleanupAudio();
     if (ws && ws.readyState === WebSocket.OPEN && endSession) {
       try { ws.send(JSON.stringify({ type: 'session.end' })); } catch { /* closing */ }
@@ -241,8 +258,16 @@ export function createAssemblyVoiceAgentSession(
         onEvent({ type: 'transcript.partial', text: message.text || '' });
         break;
       case 'transcript.user':
+        // Managed Voice events have stable item IDs. A reconnect or provider
+        // retry can redeliver an event, so never append the same utterance
+        // twice or let it become input for another tool call.
+        if (alreadyHandled(seenUserItemIds, message.item_id)) break;
         latestUserTranscript = message.text || '';
-        onEvent({ type: 'transcript.final', text: message.text || '' });
+        onEvent({
+          type: 'transcript.final',
+          text: message.text || '',
+          eventId: message.item_id || null,
+        });
         break;
       case 'reply.started':
         lastTurnEvent = message.type;
@@ -255,10 +280,15 @@ export function createAssemblyVoiceAgentSession(
       case 'tool.call':
         // Start the HTTP work now for low latency, but send tool.result only
         // after the matching function-call reply.done, per AssemblyAI's API.
-        if (message.call_id) queueToolCall(message);
-        else onEvent({ type: 'error', message: 'Voice tool call was missing an ID.' });
+        if (!message.call_id) {
+          onEvent({ type: 'error', message: 'Voice tool call was missing an ID.' });
+        } else if (!alreadyHandled(seenToolCallIds, message.call_id)) {
+          queueToolCall(message);
+        }
         break;
       case 'transcript.agent': {
+        const agentReplyId = message.reply_id || message.item_id;
+        if (alreadyHandled(seenAgentReplyIds, agentReplyId)) break;
         const isGreeting = greetingPending
           && normalized(message.text) === normalized(bootstrap?.session?.greeting);
         greetingPending = false;
@@ -276,6 +306,7 @@ export function createAssemblyVoiceAgentSession(
             grounded: lastToolResult.grounded,
             sources: lastToolResult.sources || [],
             audioManaged: true,
+            eventId: agentReplyId || null,
           });
           lastToolResult = null;
         }
