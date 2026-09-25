@@ -74,6 +74,7 @@ export function createAssemblyVoiceAgentSession(
   const seenAgentReplyIds = new Set();
   const seenToolCallIds = new Set();
 
+
   function alreadyHandled(ids, value) {
     if (value === undefined || value === null || value === '') return false;
     const id = String(value);
