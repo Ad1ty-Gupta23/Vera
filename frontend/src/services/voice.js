@@ -6,7 +6,9 @@
  * stop()      — cleans up everything
  */
 
-const WS_URL = 'ws://localhost:8000/api/ws/voice';
+import API_BASE, { toWebSocketUrl } from './api';
+
+const WS_URL = toWebSocketUrl(`${API_BASE}/ws/voice`);
 const SAMPLE_RATE = 16000;
 
 export function createVoiceSession(onEvent, wsUrl = WS_URL) {

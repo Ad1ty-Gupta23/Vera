@@ -1,4 +1,9 @@
+import os
+
 from pydantic_settings import BaseSettings
+
+
+_RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 
 
 class Settings(BaseSettings):
@@ -24,7 +29,11 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./vera.db"
     google_client_id: str = ""
     google_client_secret: str = ""
-    google_redirect_uri: str = "http://localhost:8000/api/auth/google/callback"
+    google_redirect_uri: str = (
+        f"{_RENDER_EXTERNAL_URL}/api/auth/google/callback"
+        if _RENDER_EXTERNAL_URL
+        else "http://localhost:8000/api/auth/google/callback"
+    )
     # Signs the session cookie's JWT. MUST be overridden in .env for any
     # real deployment — this default is only so local dev doesn't crash
     # with an empty secret.
@@ -32,7 +41,13 @@ class Settings(BaseSettings):
     session_cookie_name: str = "vera_session"
     session_max_age_seconds: int = 60 * 60 * 24 * 14  # 14 days
     # Where the browser is sent after a successful Google login.
-    frontend_url: str = "http://localhost:5173"
+    frontend_url: str = _RENDER_EXTERNAL_URL or "http://localhost:5173"
+    # Comma-separated origins used when the frontend runs on a separate host.
+    # The production Render deployment is same-origin.
+    cors_origins: str = "http://localhost:5173"
+    # Optional override used by local production-style smoke tests. Docker
+    # copies the build to the backend's default static/frontend directory.
+    frontend_dist_dir: str = ""
 
     # --- SaaS expansion: business knowledge base / RAG (Stage 4) ---
     # Chroma persists to disk here so embeddings survive backend restarts.
@@ -57,7 +72,11 @@ class Settings(BaseSettings):
     # project credentials — login only ever requests "openid email
     # profile" and must never accidentally end up holding a Gmail-send
     # grant, and vice versa. See app/services/gmail_oauth.py.
-    google_gmail_redirect_uri: str = "http://localhost:8000/api/gmail/callback"
+    google_gmail_redirect_uri: str = (
+        f"{_RENDER_EXTERNAL_URL}/api/gmail/callback"
+        if _RENDER_EXTERNAL_URL
+        else "http://localhost:8000/api/gmail/callback"
+    )
     gmail_send_scope: str = "https://www.googleapis.com/auth/gmail.send"
     # Fernet key (urlsafe-base64, 32 bytes) used to encrypt the Gmail
     # refresh token at rest. MUST be overridden in .env for any real
@@ -75,7 +94,7 @@ class Settings(BaseSettings):
     # used server-side for redirecting our own logged-in dashboard).
     # MUST be a real publicly-reachable HTTPS URL in production — embed
     # snippets are generated from this value.
-    backend_public_url: str = "http://localhost:8000"
+    backend_public_url: str = _RENDER_EXTERNAL_URL or "http://localhost:8000"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 
