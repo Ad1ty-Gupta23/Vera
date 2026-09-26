@@ -97,7 +97,7 @@ export default function AppBar({ title, subtitle, backTo, backLabel }) {
             border: '1px solid rgba(168,183,255,0.2)',
             flexShrink: 0,
           }}>
-            <img src="/vexora-avatar.jpg" alt="Vexora" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <img src="/Vera-avatar.jpg" alt="Vera" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           </div>
           <span style={{
             fontFamily: "'Space Grotesk', sans-serif",
@@ -109,7 +109,7 @@ export default function AppBar({ title, subtitle, backTo, backLabel }) {
           }}
             className="sm:!inline"
           >
-            VEXORA
+            VERA
           </span>
         </Link>
 
