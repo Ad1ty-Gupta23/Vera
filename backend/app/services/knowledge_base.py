@@ -14,6 +14,7 @@ import logging
 
 from groq import APIError, APITimeoutError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import settings
 from app.knowledge import vector_store
@@ -40,9 +41,9 @@ def process_upload(
 ) -> KnowledgeDocument:
     """
     Creates the KnowledgeDocument row and processes it synchronously
-    (extract -> chunk -> embed). Stage-4 scope keeps this synchronous for
-    simplicity; a background task queue would be the natural upgrade once
-    uploads are large/frequent enough for this to block requests noticeably.
+    (extract -> chunk -> embed). Call this from a worker thread, as the
+    synchronous upload and gap-resolution routes do. The request still waits
+    for processing to finish, but does not occupy the server's event loop.
     """
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "unknown"
     document = KnowledgeDocument(
@@ -129,7 +130,9 @@ async def answer_question(business: Business, question: str) -> dict:
     without calling the LLM at all, per the "don't hallucinate business
     facts" requirement.
     """
-    retrieved = vector_store.query(
+    # Both the local embedder and the synchronous Groq SDK can block.
+    retrieved = await run_in_threadpool(
+        vector_store.query,
         business_id=business.id,
         question=question,
         top_k=settings.kb_retrieval_top_k,
@@ -149,7 +152,8 @@ async def answer_question(business: Business, question: str) -> dict:
 
     client = get_client()
     try:
-        response = client.chat.completions.create(
+        response = await run_in_threadpool(
+            client.chat.completions.create,
             model=settings.groq_model,
             messages=[
                 {"role": "system", "content": system_prompt},

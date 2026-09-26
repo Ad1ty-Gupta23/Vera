@@ -1,4 +1,5 @@
 import asyncio
+import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -91,6 +92,39 @@ class KnowledgeGapTests(unittest.TestCase):
         self.assertFalse(
             business_chat._profile_can_answer(business_row, "Do you ship internationally?")
         )
+
+    def test_business_chat_retrieval_and_model_run_off_event_loop(self):
+        business_row = self.make_business()
+        loop_thread = threading.get_ident()
+        response = MagicMock()
+        response.choices[0].message.content = "Returns are accepted within 30 days."
+
+        def retrieve(**kwargs):
+            self.assertNotEqual(threading.get_ident(), loop_thread)
+            self.assertEqual(kwargs["business_id"], business_row.id)
+            return [{
+                "text": "Returns are accepted within 30 days.", "document_id": 42,
+                "filename": "policy.txt", "distance": 0.1,
+            }]
+
+        def complete(**kwargs):
+            self.assertNotEqual(threading.get_ident(), loop_thread)
+            return response
+
+        with (
+            patch.object(business_chat.issue_workflow, "maybe_handle_turn", return_value=None),
+            patch.object(business_chat.vector_store, "query", side_effect=retrieve) as query,
+            patch.object(business_chat, "get_client") as client,
+        ):
+            client.return_value.chat.completions.create.side_effect = complete
+            result = asyncio.run(business_chat.send_message(
+                self.db, business_row, "widget:thread-check", "What is your return policy?"
+            ))
+        query.assert_called_once()
+        client.return_value.chat.completions.create.assert_called_once()
+        self.assertTrue(result["grounded"])
+        self.assertEqual(result["sources"], ["policy.txt"])
+        self.assertIn("30 days", result["answer"])
 
     def test_retrieval_question_carries_context_into_follow_up(self):
         history = [

@@ -24,6 +24,7 @@ from typing import Optional, Tuple
 
 from groq import APIError, APITimeoutError
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.config.settings import settings
 from app.knowledge import vector_store
@@ -633,7 +634,9 @@ async def send_message(
         }
 
     retrieval_question = _retrieval_question(message, history)
-    retrieved = vector_store.query(
+    # Only pass plain values to workers; the request's DB session stays here.
+    retrieved = await run_in_threadpool(
+        vector_store.query,
         business_id=business.id,
         question=retrieval_question,
         top_k=settings.kb_retrieval_top_k,
@@ -668,7 +671,8 @@ async def send_message(
     client = get_client()
     model_succeeded = False
     try:
-        response = client.chat.completions.create(
+        response = await run_in_threadpool(
+            client.chat.completions.create,
             model=settings.groq_model,
             messages=[
                 {"role": "system", "content": system_prompt},

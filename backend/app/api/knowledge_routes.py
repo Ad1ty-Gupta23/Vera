@@ -126,12 +126,14 @@ def get_owned_gap(
 # ------------------------------------------------------------------ routes --
 
 @router.post("/upload", response_model=KnowledgeDocumentOut, status_code=status.HTTP_201_CREATED)
-async def upload_document(
+def upload_document(
     file: UploadFile = File(...),
     business: Business = Depends(get_owned_business),
     db: Session = Depends(get_db),
 ):
-    if "." not in file.filename:
+    # A synchronous route runs in FastAPI's worker pool. Keep extraction,
+    # embedding, DB work and response serialization off the main event loop.
+    if not file.filename or "." not in file.filename:
         raise HTTPException(status_code=400, detail="File must have an extension.")
     ext = file.filename.rsplit(".", 1)[-1].lower()
     if ext not in SUPPORTED_EXTENSIONS:
@@ -140,8 +142,9 @@ async def upload_document(
             detail=f"Unsupported file type '.{ext}'. Supported: {', '.join(sorted(SUPPORTED_EXTENSIONS))}.",
         )
 
-    content = await file.read()
     max_bytes = settings.kb_max_file_size_mb * 1024 * 1024
+    # Read only enough to detect an oversized file, not its entire contents.
+    content = file.file.read(max_bytes + 1)
     if len(content) > max_bytes:
         raise HTTPException(
             status_code=400,
