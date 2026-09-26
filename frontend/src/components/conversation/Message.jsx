@@ -9,7 +9,7 @@ export default function Message({ message }) {
     <div className={`flex flex-col gap-1 ${isUser ? 'items-end' : 'items-start'}`}>
       {/* Sender label */}
       <span className="text-[10px] text-[#5A6180] px-1 uppercase tracking-wider font-medium">
-        {isUser ? 'You' : 'Vexora'}
+        {isUser ? 'You' : 'Vera'}
       </span>
 
       <div className={`flex items-end gap-2 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>

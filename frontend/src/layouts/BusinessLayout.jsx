@@ -41,7 +41,7 @@ export default function BusinessLayout() {
             className="w-12 h-12 rounded-2xl overflow-hidden"
             style={{ boxShadow: '0 0 20px rgba(113,145,255,0.4)', border: '1px solid rgba(168,183,255,0.25)' }}
           >
-            <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+            <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
           </div>
           <LoadingIndicator label="Loading your workspace…" />
         </div>

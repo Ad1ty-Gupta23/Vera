@@ -129,11 +129,11 @@ export default function Dashboard() {
               className="w-8 h-8 rounded-xl overflow-hidden ring-1"
               style={{ boxShadow: '0 0 12px rgba(113,145,255,0.35)', ringColor: 'rgba(168,183,255,0.3)' }}
             >
-              <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+              <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
             </div>
             <div>
               <p className="text-sm font-bold font-display text-white tracking-tight" style={{ fontFamily: "'Space Grotesk', sans-serif" }}>
-                VEXORA
+                Vera
               </p>
               <p className="text-[10px] text-[#5A6180] uppercase tracking-wider">AI Assistant</p>
             </div>
@@ -320,7 +320,7 @@ export default function Dashboard() {
                         className="font-bold text-lg text-white mb-1"
                         style={{ fontFamily: "'Space Grotesk', sans-serif" }}
                       >
-                        Hi, I'm Vexora
+                        Hi, I'm Vera
                       </p>
                       <p className="text-sm" style={{ color: '#A7AEC4' }}>
                         Type a message or press the mic to start talking

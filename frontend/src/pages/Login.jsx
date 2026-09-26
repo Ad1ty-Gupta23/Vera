@@ -48,11 +48,11 @@ export default function Login() {
         {/* Logo */}
         <div className="flex flex-col items-center gap-4 mb-8">
           <div className="w-16 h-16 rounded-2xl overflow-hidden ring-2 ring-[rgba(168,183,255,0.3)] shadow-[0_0_40px_rgba(113,145,255,0.3)] animate-pulse-glow">
-            <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+            <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
           </div>
           <div className="text-center">
             <h1 className="font-display font-bold text-2xl text-white tracking-tight">
-              VEXORA
+              Vera
             </h1>
             <p className="text-[#5A6180] text-xs uppercase tracking-[0.15em] mt-0.5">
               Voice-First AI Assistant
