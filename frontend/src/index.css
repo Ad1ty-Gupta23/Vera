@@ -1,6 +1,76 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+.demo-notice {
+  position: fixed;
+  left: max(12px, env(safe-area-inset-left));
+  bottom: max(12px, env(safe-area-inset-bottom));
+  z-index: 60;
+  max-width: min(380px, calc(100vw - 24px));
+  color: #fef3c7;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.demo-notice__panel {
+  margin-bottom: 8px;
+  padding: 18px;
+  max-height: 65dvh;
+  overflow-y: auto;
+  background: #191722;
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 16px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.demo-notice__title {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.demo-notice__panel p {
+  margin: 0 0 10px;
+  color: #d8d3c7;
+}
+
+.demo-notice__toggle,
+.demo-notice__acknowledge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 12px;
+  background: #211c22;
+  color: #fde68a;
+  font: inherit;
+  cursor: pointer;
+}
+
+.demo-notice__toggle-detail {
+  color: #d8d3c7;
+  font-size: 11px;
+}
+
+.demo-notice__acknowledge {
+  margin-top: 2px;
+  background: #fde68a;
+  color: #211c22;
+  font-weight: 600;
+}
+
+.demo-notice button:focus-visible {
+  outline: 2px solid #fde68a;
+  outline-offset: 3px;
+}
+
+.demo-notice button:hover {
+  filter: brightness(1.1);
+}
+
 /* ============================================================
    VEXORA DESIGN SYSTEM — CSS Custom Properties
    ============================================================ */

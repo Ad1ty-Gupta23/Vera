@@ -157,3 +157,8 @@ Render's free filesystem is ephemeral. SQLite records and Chroma knowledge
 uploads can be lost after a restart, redeploy, or idle spin-down, so this setup
 is intended for demos. Moving those stores to managed services is required for
 durable production data.
+
+The app shows a collapsible **Demo mode** notice explaining wake-up delays and
+temporary data storage. **Got it** remembers the acknowledgement for the browser
+tab's session; the notice can be reopened from any page. Once hosting supports
+durable data, set `VITE_SHOW_DEMO_NOTICE=false` when building the frontend to hide it.
