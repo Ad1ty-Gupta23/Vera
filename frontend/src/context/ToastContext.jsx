@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 const ToastContext = createContext(null);
 
@@ -7,6 +7,13 @@ let idCounter = 0;
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const timers = useRef({});
+
+  useEffect(() => {
+    const activeTimers = timers.current;
+    return () => {
+      Object.values(activeTimers).forEach(clearTimeout);
+    };
+  }, []);
 
   const dismiss = useCallback((id) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
@@ -28,13 +35,15 @@ export function ToastProvider({ children }) {
     [dismiss]
   );
 
-  const value = {
+  // Notifications must not change the action object: consumers may use it
+  // as an effect dependency, including when reporting a failed request.
+  const value = useMemo(() => ({
     showToast,
     success: (msg, opts) => showToast(msg, { ...opts, type: 'success' }),
     error: (msg, opts) => showToast(msg, { ...opts, type: 'error' }),
     info: (msg, opts) => showToast(msg, { ...opts, type: 'info' }),
     dismiss,
-  };
+  }), [showToast, dismiss]);
 
   return (
     <ToastContext.Provider value={value}>

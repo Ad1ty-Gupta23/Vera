@@ -7,6 +7,7 @@ export default function Login() {
   const { isAuthenticated, isLoading, loginWithGoogle } = useAuth();
   const [searchParams] = useSearchParams();
   const error = searchParams.get('error');
+  const sessionExpired = searchParams.get('reason') === 'session_expired';
 
   useEffect(() => {
     if (error) {
@@ -78,6 +79,12 @@ export default function Login() {
               Sign in to access your AI assistant
             </p>
           </div>
+
+          {sessionExpired && (
+            <div role="alert" className="mb-4 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
+              <p className="text-sm text-amber-300">Your session is no longer valid. Please sign in again to continue.</p>
+            </div>
+          )}
 
           {error && (
             <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center gap-2">

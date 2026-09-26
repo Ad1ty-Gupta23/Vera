@@ -1,19 +1,6 @@
 import API_BASE from './api';
 
-async function handle(res) {
-  if (res.status === 204) return null;
-  let body = null;
-  try {
-    body = await res.json();
-  } catch {
-    body = null;
-  }
-  if (!res.ok) {
-    const message = body?.detail || `Request failed (${res.status})`;
-    throw new Error(typeof message === 'string' ? message : 'Request failed');
-  }
-  return body;
-}
+import { handleAuthenticatedResponse as handle } from './apiResponse';
 
 export async function listDocuments(businessId) {
   const res = await fetch(`${API_BASE}/businesses/${businessId}/knowledge-base`, {
@@ -51,9 +38,10 @@ export async function queryKnowledgeBase(businessId, question) {
   return handle(res);
 }
 
-export async function listKnowledgeGaps(businessId) {
+export async function listKnowledgeGaps(businessId, { signal } = {}) {
   const res = await fetch(`${API_BASE}/businesses/${businessId}/knowledge-base/gaps`, {
     credentials: 'include',
+    signal,
   });
   return handle(res);
 }

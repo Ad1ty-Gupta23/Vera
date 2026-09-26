@@ -185,19 +185,32 @@ function TestAssistant({ businessId }) {
 function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
   const toast = useToast();
   const [gaps, setGaps] = useState(undefined);
+  const [loadError, setLoadError] = useState(null);
+  const requestRef = useRef(null);
   const [answers, setAnswers] = useState({});
   const [busyId, setBusyId] = useState(null);
 
   const refresh = useCallback(async () => {
+    requestRef.current?.abort();
+    if (!businessId) return;
+    const controller = new AbortController();
+    requestRef.current = controller;
+    setLoadError(null);
     try {
-      setGaps(await listKnowledgeGaps(businessId));
+      const result = await listKnowledgeGaps(businessId, { signal: controller.signal });
+      if (!controller.signal.aborted) setGaps(result);
     } catch (err) {
-      toast.error(err.message || 'Could not load knowledge gaps.');
-      setGaps([]);
+      if (controller.signal.aborted) return;
+      // Keep failures local. An error is not an empty knowledge base and
+      // must never trigger another fetch via a toast/context update.
+      setLoadError(err.message || 'Could not load knowledge gaps.');
     }
-  }, [businessId, toast]);
+  }, [businessId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    return () => requestRef.current?.abort();
+  }, [refresh]);
 
   const handleResolve = async (gap) => {
     const answer = (answers[gap.id] || '').trim();
@@ -251,7 +264,14 @@ function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
         )}
       </div>
 
-      {gaps === undefined ? (
+      {loadError ? (
+        <div>
+          <ErrorMessage error={loadError} />
+          <button type="button" onClick={refresh} style={{ ...BTN_GHOST, marginTop: '10px' }}>
+            Retry loading knowledge gaps
+          </button>
+        </div>
+      ) : gaps === undefined ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '32px 0' }}>
           <LoadingIndicator label="Finding unanswered questions..." />
         </div>
@@ -351,7 +371,20 @@ export default function KnowledgeBase() {
         const ext = `.${file.name.split('.').pop()?.toLowerCase()}`;
         if (!ACCEPTED_EXTENSIONS.includes(ext)) { toast.error(`${file.name}: unsupported file type.`); failed += 1; continue; }
         if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) { toast.error(`${file.name}: exceeds ${MAX_FILE_SIZE_MB}MB limit.`); failed += 1; continue; }
-        try { await uploadDocument(businessId, file); succeeded += 1; } catch (err) { toast.error(`${file.name}: ${err.message || 'upload failed'}`); failed += 1; }
+        try {
+          await uploadDocument(businessId, file);
+          succeeded += 1;
+        } catch (err) {
+          if (err.status === 401) {
+            // AuthProvider returns to sign-in. Do not keep uploading the
+            // remaining files or refresh the protected lists afterward.
+            setUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+          }
+          toast.error(`${file.name}: ${err.message || 'upload failed'}`);
+          failed += 1;
+        }
       }
       setUploading(false);
       if (succeeded > 0) toast.success(succeeded === 1 ? 'Document uploaded — processing now.' : `${succeeded} documents uploaded.`);
@@ -466,7 +499,7 @@ export default function KnowledgeBase() {
 
       {businessId && (
         <div style={{ marginBottom: '20px' }}>
-          <KnowledgeGaps businessId={businessId} onKnowledgeChanged={refresh} />
+          <KnowledgeGaps key={businessId} businessId={businessId} onKnowledgeChanged={refresh} />
         </div>
       )}
 

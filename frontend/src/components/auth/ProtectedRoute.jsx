@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 export default function ProtectedRoute({ children }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, sessionExpired } = useAuth();
 
   if (isLoading) {
     return (
@@ -34,7 +34,9 @@ export default function ProtectedRoute({ children }) {
   // After logout, navigate('/') fires before this re-render, so users land on
   // the Landing page. This redirect is a fallback for direct URL access while
   // unauthenticated — sends them to Landing which has the Sign In button.
-  if (!isAuthenticated) return <Navigate to="/" replace />;
+  if (!isAuthenticated) {
+    return <Navigate to={sessionExpired ? '/login?reason=session_expired' : '/'} replace />;
+  }
 
   return children;
 }

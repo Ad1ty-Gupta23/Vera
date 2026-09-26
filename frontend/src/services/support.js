@@ -1,18 +1,6 @@
 import API_BASE from './api';
 
-async function handle(res) {
-  let body = null;
-  try {
-    body = await res.json();
-  } catch {
-    body = null;
-  }
-  if (!res.ok) {
-    const message = body?.detail || `Request failed (${res.status})`;
-    throw new Error(typeof message === 'string' ? message : 'Request failed');
-  }
-  return body;
-}
+import { handleAuthenticatedResponse as handle } from './apiResponse';
 
 export async function listTickets(businessId) {
   return handle(await fetch(`${API_BASE}/businesses/${businessId}/support/tickets`, {
