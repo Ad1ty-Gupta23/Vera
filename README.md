@@ -135,3 +135,30 @@ cd ..\frontend
 npm run lint
 npm run build
 ```
+
+## Deploy on Render (free demo)
+
+The repository includes a root `Dockerfile` and `render.yaml` that build the
+React application and serve it from the same FastAPI service.
+
+1. Push this repository to GitHub.
+2. In Render, choose **New > Blueprint** and select the repository.
+3. Enter the requested API keys. Render automatically generates the session
+   and token-encryption secrets.
+4. After Render shows the service URL, add these exact URLs to the Google OAuth
+   application's authorized redirect URIs:
+   - `https://YOUR-SERVICE.onrender.com/api/auth/google/callback`
+   - `https://YOUR-SERVICE.onrender.com/api/gmail/callback`
+
+The app automatically reads Render's public service URL, so no frontend URL,
+backend URL, or callback URL environment variables are needed on Render.
+
+Render's free filesystem is ephemeral. SQLite records and Chroma knowledge
+uploads can be lost after a restart, redeploy, or idle spin-down, so this setup
+is intended for demos. Moving those stores to managed services is required for
+durable production data.
+
+The app shows a collapsible **Demo mode** notice explaining wake-up delays and
+temporary data storage. **Got it** remembers the acknowledgement for the browser
+tab's session; the notice can be reopened from any page. Once hosting supports
+durable data, set `VITE_SHOW_DEMO_NOTICE=false` when building the frontend to hide it.

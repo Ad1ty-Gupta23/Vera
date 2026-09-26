@@ -1,5 +1,8 @@
-from fastapi import FastAPI
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.api.routes import router
@@ -23,7 +26,11 @@ app = FastAPI(title="VERA Backend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        origin.strip()
+        for origin in settings.cors_origins.split(",")
+        if origin.strip()
+    ],
     allow_credentials=True,  # required so the browser sends the auth cookie
     allow_methods=["*"],
     allow_headers=["*"],
@@ -114,3 +121,30 @@ app.include_router(embed_router, prefix="/api")
 app.include_router(public_router, prefix="/api")
 app.include_router(voice_agent_router, prefix="/api")
 app.include_router(support_router, prefix="/api")
+
+
+# The production Docker image copies Vite's output here. Keeping this route
+# last ensures API and WebSocket routes always win, while React Router paths
+# such as /business/overview receive index.html and work on page refresh.
+_FRONTEND_DIR = (
+    Path(settings.frontend_dist_dir).resolve()
+    if settings.frontend_dist_dir
+    else Path(__file__).resolve().parent / "static" / "frontend"
+)
+_FRONTEND_INDEX = _FRONTEND_DIR / "index.html"
+
+if _FRONTEND_INDEX.is_file():
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        if full_path == "api" or full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+
+        candidate = (_FRONTEND_DIR / full_path).resolve()
+        try:
+            candidate.relative_to(_FRONTEND_DIR.resolve())
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="Not found") from exc
+
+        if candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(_FRONTEND_INDEX)

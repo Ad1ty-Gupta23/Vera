@@ -12,11 +12,7 @@ import {
   VoiceAgentUnavailableError,
 } from '../../services/assemblyVoiceAgent';
 import { speak, stop as stopSpeech } from '../../services/tts';
-import API_BASE from '../../services/api';
-
-// Same host/port as the REST API, just ws(s):// instead of http(s):// —
-// mirrors how the free chatbot's voice session reuses the API's own host.
-const BUSINESS_VOICE_WS_BASE = API_BASE.replace(/^http/, 'ws');
+import API_BASE, { toWebSocketUrl } from '../../services/api';
 
 const THEME_PRESETS = ['#7c3aed', '#2563eb', '#059669', '#dc2626', '#d97706', '#0891b2'];
 const MESSAGE_URL_RE = /(https?:\/\/[^\s]+)/g;
@@ -427,7 +423,9 @@ function TestChat({ businessId, greeting, themeColor }) {
       if (voiceSessionRef.current !== managedSession) return;
       managedSession.stop();
       if (err instanceof VoiceAgentUnavailableError || err?.fallbackAllowed) {
-        const wsUrl = `${BUSINESS_VOICE_WS_BASE}/ws/business-voice/test/${businessId}?session_id=${encodeURIComponent(sessionId)}`;
+        const wsUrl = toWebSocketUrl(
+          `${API_BASE}/ws/business-voice/test/${businessId}?session_id=${encodeURIComponent(sessionId)}`,
+        );
         const fallbackSession = createVoiceSession(handleVoiceEvent, wsUrl);
         voiceSessionRef.current = fallbackSession;
         try {

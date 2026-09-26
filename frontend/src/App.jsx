@@ -4,6 +4,7 @@ import { VERAProvider } from './context/VERAContext';
 import { ToastProvider } from './context/ToastContext';
 import { BusinessProvider } from './context/BusinessContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import DemoNotice from './components/common/DemoNotice';
 import BusinessLayout from './layouts/BusinessLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -28,6 +29,7 @@ import SupportDesk from './pages/business/SupportDesk';
 function App() {
   return (
     <BrowserRouter>
+      <DemoNotice />
       <ToastProvider>
         <AuthProvider>
           <Routes>
