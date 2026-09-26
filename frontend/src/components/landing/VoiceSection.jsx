@@ -163,7 +163,7 @@ export default function VoiceSection() {
                     <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                   </svg>
-                  Talk to Vexora
+                  Talk to Vera
                 </Link>
               </div>
             </GlassCard>
@@ -174,8 +174,8 @@ export default function VoiceSection() {
             <div className="flex flex-col gap-6">
               <SectionHeading
                 label="Voice-First Experience"
-                title="Just Speak. Vexora Handles the Rest."
-                subtitle="Powered by AssemblyAI's real-time voice technology, Vexora understands natural speech with sub-100ms latency. No wake words. No button holding. Just talk."
+                title="Just Speak. Vera Handles the Rest."
+                subtitle="Powered by AssemblyAI's real-time voice technology, Vera understands natural speech with sub-100ms latency. No wake words. No button holding. Just talk."
                 align="left"
               />
               <div className="flex flex-col gap-3 mt-2">

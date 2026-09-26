@@ -87,8 +87,8 @@ export default function WorkflowSection() {
             <div className="flex flex-col gap-6">
               <SectionHeading
                 label="Visual Workflow Intelligence"
-                title="See How Vexora Thinks"
-                subtitle="Every action Vexora takes is transparent. Watch live as it analyzes your request, selects the right tools, and builds its response — step by step."
+                title="See How Vera Thinks"
+                subtitle="Every action Vera takes is transparent. Watch live as it analyzes your request, selects the right tools, and builds its response — step by step."
                 align="left"
               />
               <div className="flex flex-col gap-3 mt-2">

@@ -23,7 +23,7 @@ export default function GmailSection() {
               <SectionHeading
                 label="Gmail Automation"
                 title="Send Emails by Voice Command"
-                subtitle="Vexora drafts support emails, inquiry messages, and follow-ups from your Gmail account — with your explicit consent every time."
+                subtitle="Vera drafts support emails, inquiry messages, and follow-ups from your Gmail account — with your explicit consent every time."
                 align="left"
               />
               <div className="flex flex-col gap-3 mt-2">

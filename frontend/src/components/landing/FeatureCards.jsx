@@ -13,7 +13,7 @@ const FEATURES = [
     ),
     color: '#7191FF',
     label: 'Voice Conversations',
-    description: 'Talk naturally in real-time. Vexora listens, understands context, and responds instantly with human-like voice.',
+    description: 'Talk naturally in real-time. Vera listens, understands context, and responds instantly with human-like voice.',
   },
   {
     icon: (
@@ -23,7 +23,7 @@ const FEATURES = [
     ),
     color: '#9B8CFF',
     label: 'AI Chat',
-    description: 'Type or speak — Vexora understands both. Context-aware conversations that remember what matters.',
+    description: 'Type or speak — Vera understands both. Context-aware conversations that remember what matters.',
   },
   {
     icon: (
@@ -46,7 +46,7 @@ const FEATURES = [
     ),
     color: '#7191FF',
     label: 'Visual Workflows',
-    description: 'See Vexora\'s reasoning as a live interactive diagram. Complex decisions made visual and understandable.',
+    description: 'See Vera\'s reasoning as a live interactive diagram. Complex decisions made visual and understandable.',
   },
   {
     icon: (
@@ -93,7 +93,7 @@ export default function FeatureCards() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 lg:px-8 relative z-10">
         <AnimatedReveal className="mb-16">
           <SectionHeading
-            label="What Vexora Can Do"
+            label="What Vera Can Do"
             title="Intelligence at Your Command"
             subtitle="Six powerful capabilities working together to give you an AI assistant that truly understands and acts."
             align="center"

@@ -62,10 +62,10 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" id="nav-logo" className="flex items-center gap-2.5 group shrink-0">
           <div className="w-8 h-8 rounded-xl overflow-hidden ring-1 ring-[rgba(168,183,255,0.3)] group-hover:ring-[rgba(168,183,255,0.6)] transition-all duration-200 shadow-[0_0_12px_rgba(113,145,255,0.3)]">
-            <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+            <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
           </div>
           <span className="font-display font-bold text-lg text-white tracking-tight">
-            VEXORA
+            Vera
           </span>
         </Link>
 

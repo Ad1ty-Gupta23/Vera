@@ -19,8 +19,8 @@ export default function RobotAvatar({ size = 'sm', glow = false, className = '' 
       `}
     >
       <img
-        src="/vexora-avatar.jpg"
-        alt="Vexora AI"
+        src="/Vera-avatar.jpg"
+        alt="Vera AI"
         className="w-full h-full object-cover"
         loading="lazy"
       />

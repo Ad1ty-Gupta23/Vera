@@ -70,10 +70,10 @@ export default function CtaSection() {
             {/* Mini robot card */}
             <GlassCard padding="px-5 py-3" className="inline-flex items-center gap-3 mt-2">
               <div className="w-10 h-10 rounded-xl overflow-hidden ring-1 ring-[rgba(168,183,255,0.3)]">
-                <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+                <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-white">Vexora is ready</p>
+                <p className="text-sm font-semibold text-white">Vera is ready</p>
                 <p className="text-xs text-[#5A6180]">No setup required · Start instantly</p>
               </div>
               <div className="w-2 h-2 rounded-full bg-[#7191FF] animate-pulse" />
@@ -86,9 +86,9 @@ export default function CtaSection() {
       <div className="max-w-7xl mx-auto px-4 md:px-6 mt-20 pt-8 border-t border-[rgba(180,195,255,0.07)] flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#5A6180]">
         <div className="flex items-center gap-2">
           <div className="w-5 h-5 rounded-md overflow-hidden">
-            <img src="/vexora-avatar.jpg" alt="Vexora" className="w-full h-full object-cover" />
+            <img src="/Vera-avatar.jpg" alt="Vera" className="w-full h-full object-cover" />
           </div>
-          <span className="font-display font-semibold text-[#A7AEC4]">VEXORA</span>
+          <span className="font-display font-semibold text-[#A7AEC4]">Vera</span>
           <span className="text-[#2D3560]">·</span>
           <span>Voice-First AI Assistant</span>
         </div>

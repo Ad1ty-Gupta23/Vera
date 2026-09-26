@@ -13,7 +13,7 @@ const STEPS = [
       </svg>
     ),
     title: 'Speak or Type',
-    description: 'Start a conversation naturally. Use your voice or keyboard — Vexora understands both.',
+    description: 'Start a conversation naturally. Use your voice or keyboard — Vera understands both.',
     color: '#7191FF',
   },
   {

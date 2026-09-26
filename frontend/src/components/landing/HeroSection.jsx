@@ -82,7 +82,7 @@ export default function HeroSection() {
             <AnimatedReveal delay={100}>
               <h1 className="font-display font-bold text-5xl sm:text-6xl lg:text-7xl leading-[1.05] text-white">
                 MEET{' '}
-                <span className="shimmer-text">VEXORA</span>
+                <span className="shimmer-text">Vera</span>
               </h1>
             </AnimatedReveal>
 
@@ -152,8 +152,8 @@ export default function HeroSection() {
               {/* Hero robot image */}
               <div className="relative z-10 w-full max-w-[520px]">
                 <img
-                  src="/vexora-robot-hero.jpg"
-                  alt="Vexora AI Robot"
+                  src="/Vera-robot-hero.jpg"
+                  alt="Vera AI Robot"
                   className="w-full rounded-2xl"
                   style={{ filter: 'drop-shadow(0 0 40px rgba(113,145,255,0.2))' }}
                   loading="eager"

@@ -43,7 +43,7 @@ export default function BusinessSection() {
                   <p className="font-semibold font-display text-white text-sm">Acme Corp Assistant</p>
                   <div className="flex items-center gap-1.5">
                     <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                    <p className="text-xs text-[#A7AEC4]">Online · Powered by Vexora</p>
+                    <p className="text-xs text-[#A7AEC4]">Online · Powered by Vera</p>
                   </div>
                 </div>
                 <button className="ml-auto w-7 h-7 rounded-lg glass text-[#5A6180] hover:text-white transition-colors flex items-center justify-center">
