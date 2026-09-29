@@ -1,113 +1,155 @@
-/**
- * voice.js — WebSocket + optional microphone session
- *
- * start()     — connects WebSocket AND starts microphone (voice mode)
- * startTextOnly() — connects WebSocket only, no mic (text mode)
- * stop()      — cleans up everything
- */
-
+/** A conversation socket whose microphone can be enabled and paused independently. */
 import API_BASE, { toWebSocketUrl } from './api';
 
 const WS_URL = toWebSocketUrl(`${API_BASE}/ws/voice`);
 const SAMPLE_RATE = 16000;
 
-export function createVoiceSession(onEvent, wsUrl = WS_URL) {
+export function createVoiceSession(onEvent, wsUrl = WS_URL, { voiceControls = false } = {}) {
   let ws = null;
+  let connecting = null;
+  let startingMic = null;
   let audioContext = null;
   let workletNode = null;
+  let silentGain = null;
   let stream = null;
   let sourceNode = null;
   let stopped = false;
+  let micGeneration = 0;
+
+  function sendControl(type) {
+    if (voiceControls && ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type }));
+  }
 
   function cleanupAudio() {
+    micGeneration += 1;
     workletNode?.disconnect();
     sourceNode?.disconnect();
-    stream?.getTracks().forEach((t) => t.stop());
-    if (audioContext && audioContext.state !== 'closed') {
-      audioContext.close().catch(() => {});
-    }
-    workletNode = null;
-    sourceNode = null;
-    stream = null;
-    audioContext = null;
+    silentGain?.disconnect();
+    stream?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
+    if (audioContext && audioContext.state !== 'closed') audioContext.close().catch(() => {});
+    workletNode = sourceNode = silentGain = stream = audioContext = null;
   }
 
   function cleanup() {
     stopped = true;
     cleanupAudio();
-    if (ws && ws.readyState < WebSocket.CLOSING) {
-      ws.close();
-    }
+    if (ws && ws.readyState < WebSocket.CLOSING) ws.close();
     ws = null;
   }
 
-  async function connectWs() {
-    ws = new WebSocket(wsUrl);
-    ws.binaryType = 'arraybuffer';
-
-    await new Promise((resolve, reject) => {
-      ws.onopen = resolve;
-      ws.onerror = () => reject(new Error('WebSocket connection failed'));
-    });
-
-    ws.onmessage = (e) => {
-      try {
-        const event = JSON.parse(e.data);
-        onEvent(event);
-      } catch {
-        // ignore malformed frames
-      }
-    };
-
-    ws.onclose = () => {
-      if (!stopped) {
-        onEvent({ type: 'error', message: 'Connection closed unexpectedly' });
+  function connectWs() {
+    if (stopped) return Promise.reject(new Error('Session has ended'));
+    if (ws?.readyState === WebSocket.OPEN) return Promise.resolve();
+    if (connecting) return connecting;
+    const url = new URL(wsUrl);
+    if (voiceControls) url.searchParams.set('voice', 'manual');
+    const socket = new WebSocket(url.toString());
+    ws = socket;
+    socket.binaryType = 'arraybuffer';
+    connecting = new Promise((resolve, reject) => {
+      let opened = false;
+      const timeout = window.setTimeout(() => {
+        reject(new Error('Connection timed out'));
         cleanup();
-      }
-    };
-
-    ws.onerror = () => {
-      if (!stopped) {
-        onEvent({ type: 'error', message: 'WebSocket error' });
-        cleanup();
-      }
-    };
+      }, 10000);
+      socket.onopen = () => {
+        window.clearTimeout(timeout);
+        opened = true;
+        resolve();
+      };
+      // Install handlers before opening so the first session event cannot be lost.
+      socket.onmessage = (event) => {
+        if (stopped || ws !== socket) return;
+        let data;
+        try { data = JSON.parse(event.data); } catch { return; }
+        onEvent(data);
+      };
+      const closed = () => {
+        window.clearTimeout(timeout);
+        if (!opened) reject(new Error('WebSocket connection failed'));
+        if (!stopped && ws === socket) {
+          cleanup();
+          onEvent({ type: voiceControls ? 'connection.closed' : 'error', message: 'Connection lost. Start voice or send a message to reconnect.' });
+        }
+      };
+      socket.onclose = closed;
+      socket.onerror = closed;
+    }).finally(() => { connecting = null; });
+    return connecting;
   }
 
   async function startMic() {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: SAMPLE_RATE, channelCount: 1, echoCancellation: true },
-    });
-
-    audioContext = new AudioContext({ sampleRate: SAMPLE_RATE });
-    await audioContext.audioWorklet.addModule('/microphoneProcessor.js');
-
-    sourceNode = audioContext.createMediaStreamSource(stream);
-    workletNode = new AudioWorkletNode(audioContext, 'microphone-processor');
-
-    workletNode.port.onmessage = (e) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(e.data);
+    if (stream) return true;
+    if (startingMic) return startingMic;
+    const generation = micGeneration;
+    startingMic = (async () => {
+      const captured = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: SAMPLE_RATE, channelCount: 1,
+          echoCancellation: true, noiseSuppression: true, autoGainControl: !voiceControls,
+        },
+      });
+      if (stopped || generation !== micGeneration) {
+        captured.getTracks().forEach((track) => track.stop());
+        return false;
       }
-    };
-
-    sourceNode.connect(workletNode);
+      stream = captured;
+      try {
+        const context = new AudioContext({ sampleRate: SAMPLE_RATE });
+        audioContext = context;
+        await context.audioWorklet.addModule('/microphoneProcessor.js?v=noise-gate-1');
+        if (stopped || generation !== micGeneration) return false;
+        sourceNode = context.createMediaStreamSource(captured);
+        workletNode = new AudioWorkletNode(context, 'microphone-processor', {
+          processorOptions: { noiseGate: voiceControls },
+        });
+        silentGain = context.createGain();
+        silentGain.gain.value = 0;
+        workletNode.port.onmessage = (event) => {
+          if (generation === micGeneration && ws?.readyState === WebSocket.OPEN) ws.send(event.data);
+        };
+        // A connected, silent output keeps the worklet processing continuously.
+        sourceNode.connect(workletNode);
+        workletNode.connect(silentGain);
+        silentGain.connect(context.destination);
+        await context.resume();
+        if (stopped || generation !== micGeneration) return false;
+        captured.getTracks().forEach((track) => {
+          track.onended = () => {
+            stopMicrophone();
+            onEvent({ type: 'microphone.error', message: 'Microphone disconnected. Reconnect it and start voice again.' });
+          };
+        });
+        sendControl('voice.start');
+        return true;
+      } catch (error) {
+        if (generation === micGeneration) cleanupAudio();
+        throw error;
+      }
+    })().finally(() => { startingMic = null; });
+    return startingMic;
   }
 
-  // Full voice mode: WebSocket + microphone
   async function start() {
+    const generation = micGeneration;
     await connectWs();
-    await startMic();
+    if (startingMic) await startingMic.catch(() => {});
+    if (stopped || generation !== micGeneration) return false;
+    return startMic();
   }
 
-  // Text-only mode: WebSocket only, no mic
-  async function startTextOnly() {
-    await connectWs();
+  function stopMicrophone() {
+    cleanupAudio();
+    sendControl('voice.stop');
   }
 
-  function stop() {
-    cleanup();
-  }
-
-  return { start, startTextOnly, stop, get _ws() { return ws; } };
+  return {
+    start,
+    startTextOnly: connectWs,
+    stopMicrophone,
+    interrupt: () => sendControl('agent.interrupt'),
+    stop: cleanup,
+    get _ws() { return ws; },
+    get microphoneActive() { return Boolean(stream); },
+  };
 }

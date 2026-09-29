@@ -94,6 +94,51 @@ class SupportDeskTests(unittest.TestCase):
         self.assertEqual(repeated.id, ticket.id)
         self.assertEqual(self.db.query(SupportTicket).count(), 1)
 
+    def test_volunteered_return_details_create_real_incident_then_confirmed_case(self):
+        history = [
+            {"role": "user", "content": "What is the return policy?"},
+            {"role": "assistant", "content": "Report the issue with your order ID."},
+            {"role": "user", "content": "Do you offer student discounts?"},
+        ]
+        with patch.object(issue_workflow, "_call_extraction", return_value={
+            "is_issue_report": False, "extracted": {"order_reference": "127"}, "skip_fields": [],
+        }):
+            result = issue_workflow.maybe_handle_turn(
+                self.db, self.business, self.conversation, "So my order ID was 127.", history,
+            )
+        self.assertIsNotNone(result["incident"])
+        row = self.db.query(Incident).one()
+        self.assertEqual(row.status, Incident.STATUS_COLLECTING)
+        self.assertEqual(row.order_reference, "127")
+        self.assertIsNone(row.issue_description)  # Never invent damage.
+        with patch.object(issue_workflow, "_call_extraction", return_value={
+            "is_issue_report": True,
+            "extracted": {"customer_name": "Demo Customer", "issue_description": "Return my unused product"},
+            "skip_fields": ["customer_email"],
+        }):
+            issue_workflow.maybe_handle_turn(
+                self.db, self.business, self.conversation,
+                "My name is Demo Customer. Return my unused product. Skip email.", history,
+            )
+        self.assertEqual(row.status, Incident.STATUS_READY_FOR_REVIEW)
+        self.assertEqual(self.db.query(SupportTicket).count(), 0)
+        result = asyncio.run(business_chat.send_message(
+            self.db, self.business, self.conversation.session_id, "Yes, I confirm.", channel="voice",
+        ))
+        self.assertIsNotNone(result["ticket"])
+        self.assertEqual(self.db.query(SupportTicket).count(), 1)
+        self.assertEqual(row.status, Incident.STATUS_TICKET_CREATED)
+        self.assertIsNone(call_operations.resolution_feedback("Yes, I confirm."))
+
+    def test_details_without_customer_action_context_do_not_start_intake(self):
+        self.assertFalse(issue_workflow.is_action_follow_up("My name is Demo Customer", [
+            {"role": "assistant", "content": "I will create a return case"},
+            {"role": "user", "content": "Do you offer student discounts?"},
+        ]))
+        self.assertFalse(issue_workflow.is_action_follow_up("Do you offer gift wrapping?", [
+            {"role": "user", "content": "What is your return policy?"},
+        ]))
+
     def test_ticket_status_updates_create_an_audit_event(self):
         ticket = support_desk.create_ticket_from_incident(
             self.db, self.business, self.make_incident()

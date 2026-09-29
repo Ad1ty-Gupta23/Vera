@@ -3,6 +3,8 @@
  * Voice Agent API's required 24 kHz PCM16 mono stream. Kept separate from
  * microphoneProcessor.js so VERA's existing 16 kHz streaming path is intact.
  */
+import { VoiceNoiseGate } from './voiceNoiseGate.js';
+
 class VoiceAgentProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
@@ -13,13 +15,26 @@ class VoiceAgentProcessor extends AudioWorkletProcessor {
     // 50 ms chunks reduce the time before AssemblyAI can detect barge-in.
     this.chunk = new Int16Array(Math.round(this.targetRate * 0.05));
     this.chunkOffset = 0;
+    this.noiseGate = options.processorOptions?.noiseGate ? new VoiceNoiseGate(50) : null;
+    // Detect sustained microphone activity locally so buffered business audio
+    // can stop before the provider returns a transcript. Keep its PCM intact.
+    this.speechDetector = options.processorOptions?.detectSpeech
+      ? new VoiceNoiseGate(50, { openThreshold: 0.012, confirmationFrames: 3 }) : null;
   }
 
   pushSample(value) {
     const sample = Math.max(-1, Math.min(1, value));
     this.chunk[this.chunkOffset++] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
     if (this.chunkOffset === this.chunk.length) {
-      this.port.postMessage(this.chunk.buffer, [this.chunk.buffer]);
+      if (this.speechDetector) {
+        const wasOpen = this.speechDetector.open;
+        this.speechDetector.filter(this.chunk.slice());
+        if (wasOpen !== this.speechDetector.open) {
+          this.port.postMessage({ type: 'speech.activity', active: this.speechDetector.open });
+        }
+      }
+      const output = this.noiseGate ? this.noiseGate.filter(this.chunk) : this.chunk;
+      this.port.postMessage(output.buffer, [output.buffer]);
       this.chunk = new Int16Array(Math.round(this.targetRate * 0.05));
       this.chunkOffset = 0;
     }

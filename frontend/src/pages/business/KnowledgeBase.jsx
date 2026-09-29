@@ -209,7 +209,13 @@ function KnowledgeGaps({ businessId, onKnowledgeChanged }) {
 
   useEffect(() => {
     refresh();
-    return () => requestRef.current?.abort();
+    const interval = window.setInterval(refresh, 10000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener('focus', refresh);
+      requestRef.current?.abort();
+    };
   }, [refresh]);
 
   const handleResolve = async (gap) => {

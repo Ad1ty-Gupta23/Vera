@@ -1,4 +1,6 @@
 import os
+from typing import Literal
+from pydantic import Field
 
 from pydantic_settings import BaseSettings
 
@@ -8,7 +10,16 @@ _RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 
 class Settings(BaseSettings):
     assemblyai_api_key: str = ""
-    # Optional sponsor-native runtime for business voice conversations. When
+    # Free dashboard: faster endpointing, with semantic turn detection retained.
+    free_voice_min_turn_silence_ms: int = 300
+    free_voice_max_turn_silence_ms: int = 1000
+    free_voice_response_timeout_seconds: float = 10.0
+    free_voice_visual_timeout_seconds: float = 12.0
+    free_voice_agent_min_silence_ms: int = 300
+    free_voice_agent_max_silence_ms: int = 1000
+    free_voice_agent_vad_threshold: float = Field(default=0.65, ge=0, le=1)
+    free_voice_agent_voice_focus: Literal["near-field", "far-field"] = "far-field"
+    # Sponsor-native runtime for free and business voice conversations. When
     # disabled (or unavailable), the frontend keeps using VERA's established
     # Universal Streaming STT + browser TTS path unchanged.
     assemblyai_voice_agent_enabled: bool = True

@@ -14,6 +14,8 @@ class VERAState(TypedDict):
 
     # Current user turn
     last_user_message: str
+    input_mode: str  # "voice" | "text", scoped to the current turn
+    current_message_id: Optional[str]
 
     # Intent tracking
     current_intent: Optional[str]

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NovaNest — Make room for better tech</title>
+  <style>
+    :root { color-scheme: light; --ink:#182b27; --paper:#f6f5ef; --green:#245d49; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--paper); color:var(--ink); font:16px/1.6 system-ui,sans-serif; }
+    a { color:inherit; }
+    .wrap { width:min(1120px,90%); margin:auto; }
+    .notice { padding:9px; background:var(--ink); color:white; text-align:center; font-size:12px; letter-spacing:.08em; }
+    header { display:flex; align-items:center; justify-content:space-between; gap:24px; padding:25px 0; border-bottom:1px solid #d7ddd4; }
+    .logo { font-size:25px; font-weight:800; letter-spacing:-1px; text-decoration:none; }
+    .logo span { color:#49896c; }
+    nav { display:flex; gap:24px; font-size:14px; }
+    nav a { text-decoration:none; }
+    a:hover { text-decoration:underline; }
+    .hero { display:grid; grid-template-columns:1.1fr 1fr; gap:60px; align-items:center; padding:75px 0; }
+    .eyebrow { text-transform:uppercase; letter-spacing:.16em; font-size:12px; font-weight:700; color:var(--green); }
+    h1 { font-size:clamp(42px,6vw,76px); line-height:1.04; letter-spacing:-.055em; margin:20px 0; font-weight:650; }
+    .intro { color:#596a62; max-width:420px; font-size:18px; }
+    .button { display:inline-block; padding:13px 23px; margin-top:16px; border-radius:6px; background:var(--green); color:white; text-decoration:none; font-weight:600; }
+    .scene { min-height:380px; border-radius:140px 140px 24px 24px; background:#dce6d4; display:grid; place-items:center; position:relative; overflow:hidden; }
+    .scene::after { content:''; position:absolute; width:300px; height:50px; border-radius:50%; background:#bfd0b5; bottom:47px; }
+    .headphones { width:185px; height:210px; border:24px solid #284c3d; border-bottom:0; border-radius:110px 110px 0 0; transform:rotate(-16deg); position:relative; z-index:1; filter:drop-shadow(12px 15px 5px #284c3d25); }
+    .headphones::before,.headphones::after { content:''; width:52px; height:102px; border-radius:22px; background:#182f25; position:absolute; top:115px; box-shadow:inset 8px 0 #3d6752; }
+    .headphones::before { left:-34px; } .headphones::after { right:-34px; }
+    .scene-label { position:absolute; top:25px; font-size:11px; letter-spacing:.16em; }
+    .benefits { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; padding:25px 0; border-top:1px solid #d7ddd4; border-bottom:1px solid #d7ddd4; }
+    .benefits strong { display:block; font-size:15px; } .benefits span { font-size:13px; color:#647168; }
+    section { padding:55px 0; scroll-margin-top:20px; }
+    h2 { font-size:32px; letter-spacing:-.04em; margin:8px 0 26px; }
+    .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:22px; }
+    .card { border:1px solid #dce0d6; border-radius:12px; padding:25px; background:#fffdf7; }
+    .icon { height:120px; display:grid; place-items:center; font-size:62px; background:#eaf0e3; border-radius:8px; }
+    .card:nth-child(2) .icon { background:#e9e5dc; } .card:nth-child(3) .icon { background:#e2e9ee; }
+    h3 { font-size:20px; margin:20px 0 7px; } .card p { color:#637066; font-size:14px; }
+    .support { display:grid; grid-template-columns:1fr 1.4fr; gap:65px; }
+    details { border-bottom:1px solid #d7ddd4; padding:17px 0; }
+    summary { font-weight:600; cursor:pointer; } details p { color:#58675e; font-size:14px; }
+    footer { padding:25px 0 35px; border-top:1px solid #d7ddd4; color:#647168; font-size:12px; display:flex; justify-content:space-between; gap:20px; }
+    :focus-visible { outline:3px solid #bc7f25; outline-offset:5px; }
+    @media(max-width:700px) { .hero,.support { grid-template-columns:1fr; gap:30px; } .hero { padding:40px 0; } .scene { min-height:320px; } .cards { grid-template-columns:1fr; } .benefits { grid-template-columns:1fr; gap:15px; } nav { gap:14px; } footer { flex-direction:column; } }
+  </style>
+</head>
+<body>
+  <div class="notice">THOUGHTFUL TECH. EVERYDAY POSSIBILITIES.</div>
+  <div class="wrap">
+    <header>
+      <a class="logo" href="#">Nova<span>Nest</span> ↗</a>
+      <nav aria-label="Main navigation"><a href="#explore">Explore</a><a href="#support">Support</a></nav>
+    </header>
+    <main>
+      <div class="hero">
+        <div>
+          <div class="eyebrow">Your next everyday essential</div>
+          <h1>Good tech.<br>Better living.</h1>
+          <p class="intro">A little more focus. A better soundtrack. A space that works for you. Discover your next upgrade at NovaNest.</p>
+          <a class="button" href="#explore">Find your everyday upgrade &nbsp; ↗</a>
+        </div>
+        <div class="scene" role="img" aria-label="Illustration of forest-green over-ear headphones"><span class="scene-label">TUNE INTO YOUR WORLD</span><div class="headphones"></div></div>
+      </div>
+      <div class="benefits">
+        <div><strong>Delivered across India</strong><span>Standard delivery in 3–5 business days</span></div>
+        <div><strong>30-day returns</strong><span>For eligible unused products</span></div>
+        <div><strong>Here when you need us</strong><span>Monday–Saturday · 9 AM–7 PM IST</span></div>
+      </div>
+      <section id="explore">
+        <div class="eyebrow">Made for your everyday</div><h2>Small upgrades. Big difference.</h2>
+        <div class="cards">
+          <article class="card"><div class="icon" aria-hidden="true">🎧</div><h3>Find your focus</h3><p>Explore audio for work sessions, slow mornings, and everything in between.</p><a href="#support">Ask about audio →</a></article>
+          <article class="card"><div class="icon" aria-hidden="true">⌨️</div><h3>Make work feel better</h3><p>Meet the desk essentials that make your corner of the world feel like yours.</p><a href="#support">Ask about accessories →</a></article>
+          <article class="card"><div class="icon" aria-hidden="true">🔊</div><h3>Set the mood</h3><p>Bring a fresh soundtrack to your favorite spaces and everyday rituals.</p><a href="#support">Ask about speakers →</a></article>
+        </div>
+      </section>
+      <section id="support" class="support">
+        <div><div class="eyebrow">A little help goes a long way</div><h2>We’re here for you.</h2><p>Questions about delivery, returns, or warranty? Start with the essentials here.</p><p>Support hours:<br><strong>Monday–Saturday<br>9:00 AM–7:00 PM IST</strong></p></div>
+        <div>
+          <details open><summary>When will my order arrive?</summary><p>Standard delivery takes 3–5 business days. Express delivery takes 1–2 business days. NovaNest currently delivers only within India. Track your order using the link in your dispatch email.</p></details>
+          <details><summary>Can I return a product?</summary><p>Unused products can be returned within 30 days of delivery, with their original packaging and accessories. Opened software and personalized products cannot be returned.</p></details>
+          <details><summary>What if my product arrives damaged?</summary><p>Report damage within 7 days of delivery. Support may request photographs of the product and packaging. Refunds and replacements are approved after review.</p></details>
+          <details><summary>Is my purchase covered by a warranty?</summary><p>Electronics include a one-year manufacturer warranty unless stated otherwise.</p></details>
+        </div>
+      </section>
+    </main>
+    <footer><span>NovaNest · A little closer to a better everyday.</span><span>Demo storefront · No purchases or payments</span></footer>
+  </div>
+<script
+  src="http://localhost:8000/api/public/widget.js"
+  data-assistant-id="4AhHOH9B0icBcZChjEiLEA"
+  data-api-base="http://localhost:8000/api"
+  async>
+</script>
+  
+</body>
+</html>

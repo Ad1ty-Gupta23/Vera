@@ -60,7 +60,7 @@ def ingest_message(state: VERAState) -> dict:
     # clean text instead of a raw, possibly-stammered transcript.
     return {
         "last_user_message": msg,
-        "messages": [HumanMessage(content=msg)],
+        "messages": [HumanMessage(content=msg, id=state.get("current_message_id"))],
         "agent_status": "processing",
     }
 
@@ -85,7 +85,20 @@ async def classify_intent_node(state: VERAState) -> dict:
         })
 
     try:
-        decision: AgentDecision = await classify_intent(state["last_user_message"], history)
+        decision: AgentDecision = await classify_intent(
+            state["last_user_message"], history,
+            voice_mode=state.get("input_mode") == "voice",
+        )
+    except TimeoutError:
+        logger.warning("[node:classify_intent] Response deadline exceeded")
+        return {
+            "current_intent": "unknown", "intent_confidence": 0.0, "urgency": "normal",
+            "requires_clarification": False, "clarification_question": None,
+            "map_required": False, "tool_required": False, "tool_name": None,
+            "tool_arguments": None, "location_query": None,
+            "last_assistant_message": "The AI service is taking too long. Please try your question again.",
+            "agent_status": "error",
+        }
     except Exception as exc:
         logger.error("[node:classify_intent] Groq error: %s", exc)
         return {

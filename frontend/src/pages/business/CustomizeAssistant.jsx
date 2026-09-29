@@ -329,11 +329,12 @@ function ActionReviewCard({
   );
 }
 
-function TestChat({ businessId, greeting, themeColor }) {
+export function TestChat({ businessId, greeting, themeColor }) {
   const [sessionId, setSessionId] = useState(() => crypto.randomUUID());
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
   const [error, setError] = useState(null);
   const [activeIncident, setActiveIncident] = useState(null);
   const [latestTicket, setLatestTicket] = useState(null);
@@ -349,13 +350,16 @@ function TestChat({ businessId, greeting, themeColor }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, activeIncident, latestHandoff, partial]);
 
-  useEffect(() => () => voiceSessionRef.current?.stop(), []);
+  useEffect(() => () => { voiceSessionRef.current?.stop(); stopSpeech(); }, []);
 
   const reset = () => {
     voiceSessionRef.current?.stop();
     voiceSessionRef.current = null;
     setVoiceActive(false);
     setVoiceMode(null);
+    stopSpeech();
+    setSending(false);
+    setSpeaking(false);
     setPartial(null);
     setSessionId(crypto.randomUUID());
     setMessages([]);
@@ -368,18 +372,31 @@ function TestChat({ businessId, greeting, themeColor }) {
 
   const handleVoiceEvent = (event) => {
     switch (event.type) {
-      case 'transcript.partial': setPartial(event.text); break;
+      case 'transcript.partial':
+        if (event.text?.trim()) { stopSpeech(); setSpeaking(false); setSending(false); }
+        setPartial(event.text); break;
       case 'transcript.final':
+        stopSpeech(); setSpeaking(false);
         setPartial(null);
         setMessages((prev) => [...prev, { role: 'customer', content: event.text }]);
         break;
       case 'agent.status': setSending(event.status === 'processing'); break;
+      case 'voice.playback':
+        setSpeaking(event.active);
+        if (event.active) setSending(false);
+        break;
       case 'agent.response':
-        setMessages((prev) => [
-          ...prev,
-          { role: 'assistant', content: event.text, grounded: event.grounded, sources: event.sources },
-        ]);
-        if (!event.audioManaged) speak(event.spoken_text || event.text);
+        setSending(false);
+        setMessages((prev) => {
+          const response = { role: 'assistant', content: event.text, grounded: event.grounded,
+            sources: event.sources, eventId: event.eventId };
+          const index = event.eventId ? prev.findIndex((message) => message.eventId === event.eventId) : -1;
+          return index < 0 ? [...prev, response] : prev.map((message, i) => i === index ? response : message);
+        });
+        if (!event.audioManaged) speak(event.spoken_text || event.text, {
+          onStart: () => { setSpeaking(true); setSending(false); },
+          onEnd: () => setSpeaking(false),
+        });
         break;
       case 'incident.update': setActiveIncident(event.incident); break;
       case 'ticket.update':
@@ -391,10 +408,22 @@ function TestChat({ businessId, greeting, themeColor }) {
         setLatestHandoff(event.handoff);
         setActiveIncident(null);
         break;
-      case 'agent.interrupted': stopSpeech(); break;
-      case 'speech.started': stopSpeech(); break;
+      case 'agent.interrupted':
+      case 'speech.started':
+        stopSpeech(); setSpeaking(false); setSending(false); break;
       case 'voice.mode': setVoiceMode(event.mode); break;
-      case 'error': setError(event.message || 'Voice session error.'); break;
+      case 'error':
+        setError(event.message || 'Voice session error.');
+        setSending(false);
+        if (event.status === 'unavailable') {
+          voiceSessionRef.current = null;
+          setVoiceActive(false);
+          setVoiceMode(null);
+          setSpeaking(false);
+          setPartial(null);
+          stopSpeech();
+        }
+        break;
       default: break;
     }
   };
@@ -405,12 +434,16 @@ function TestChat({ businessId, greeting, themeColor }) {
       voiceSessionRef.current = null;
       setVoiceActive(false);
       setVoiceMode(null);
+      setSpeaking(false);
+      setSending(false);
       setPartial(null);
       stopSpeech();
       return;
     }
     setError(null);
-    const managedSession = createAssemblyVoiceAgentSession(handleVoiceEvent, {
+    const managedSession = createAssemblyVoiceAgentSession((event) => {
+      if (voiceSessionRef.current === managedSession) handleVoiceEvent(event);
+    }, {
       sessionUrl: `${API_BASE}/businesses/${businessId}/voice-agent/session`,
       toolUrl: `${API_BASE}/businesses/${businessId}/voice-agent/tool`,
       sessionId,
@@ -418,6 +451,7 @@ function TestChat({ businessId, greeting, themeColor }) {
     voiceSessionRef.current = managedSession;
     try {
       await managedSession.start();
+      if (voiceSessionRef.current !== managedSession) return;
       setVoiceActive(true);
     } catch (err) {
       if (voiceSessionRef.current !== managedSession) return;
@@ -426,10 +460,13 @@ function TestChat({ businessId, greeting, themeColor }) {
         const wsUrl = toWebSocketUrl(
           `${API_BASE}/ws/business-voice/test/${businessId}?session_id=${encodeURIComponent(sessionId)}`,
         );
-        const fallbackSession = createVoiceSession(handleVoiceEvent, wsUrl);
+        const fallbackSession = createVoiceSession((event) => {
+          if (voiceSessionRef.current === fallbackSession) handleVoiceEvent(event);
+        }, wsUrl);
         voiceSessionRef.current = fallbackSession;
         try {
           await fallbackSession.start();
+          if (voiceSessionRef.current !== fallbackSession) return;
           setVoiceMode('standard');
           setVoiceActive(true);
           setError(null);
@@ -543,9 +580,9 @@ function TestChat({ businessId, greeting, themeColor }) {
           </div>
         )}
 
-        {sending && (
+        {(sending || speaking) && (
           <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-            <LoadingIndicator label="Thinking…" />
+            <LoadingIndicator label={speaking ? 'Speaking…' : 'Thinking…'} />
           </div>
         )}
 

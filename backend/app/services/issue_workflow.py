@@ -44,6 +44,7 @@ _ACTION_REQUEST_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
         r"\b(report|file|raise|open)\b.{0,30}\b(issue|problem|complaint|case)\b",
+        r"\b(create|submit|start|initiate)\b.{0,30}\b(ticket|case|return|refund|request)\b",
         r"\b(damaged|broken|defective|not working|stopped working|charged twice|billing error)\b",
         r"\b(book|schedule|reschedule|cancel|change|move|make)\b.{0,35}\b(appointment|reservation|booking|consultation|viewing)\b",
         r"\b(request|need|want|get|send)\b.{0,25}\b(quote|estimate|demo|callback|call back|refund|return|replacement|exchange)\b",
@@ -73,6 +74,23 @@ def looks_like_action_request(message: str) -> bool:
     if _INFORMATIONAL_PREFIX.search(text) and not _PERSONAL_ACTION_SIGNAL.search(text):
         return False
     return any(pattern.search(text) for pattern in _ACTION_REQUEST_PATTERNS)
+
+
+def is_action_follow_up(message: str, history: list[dict]) -> bool:
+    """Route volunteered case details after a return/support discussion."""
+    supplies_details = re.search(
+        r"\bmy (?:order|booking|account) (?:id|number|reference)\b"
+        r"|\bmy (?:name|email|phone) (?:is|id is)\b", message, re.IGNORECASE,
+    )
+    # Require a customer-authored action topic; assistant text alone must not
+    # fabricate intent, and a discount question must remain normal Q&A.
+    customer_context = " ".join(
+        str(item.get("content", "")) for item in history[-8:] if item.get("role") == "user"
+    )
+    return bool(supplies_details and re.search(
+        r"\b(return|returns|refund|replacement|repair|issue|problem|appointment|booking)\b",
+        customer_context, re.IGNORECASE,
+    ))
 
 # Asked in this order. name + issue_description are required before a
 # draft can be produced at all; email + order_reference are asked once
@@ -249,7 +267,8 @@ def maybe_handle_turn(
     incident = _get_open_incident(db, conversation.id)
 
     if incident is None:
-        if not looks_like_action_request(message):
+        contextual_action = is_action_follow_up(message, history)
+        if not looks_like_action_request(message) and not contextual_action:
             return None
         try:
             result = _call_extraction(business, message, history)
@@ -257,7 +276,7 @@ def maybe_handle_turn(
             logger.error("[issue_workflow] extraction call failed business_id=%s: %s", business.id, exc)
             return None  # fall back to normal RAG rather than blocking the turn
 
-        if not result.get("is_issue_report"):
+        if not result.get("is_issue_report") and not contextual_action:
             return None
 
         incident = Incident(business_id=business.id, conversation_id=conversation.id)

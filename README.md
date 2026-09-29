@@ -71,6 +71,61 @@ flowchart LR
 
 ## Local setup
 
+The free chat at `/dashboard` supports a continuous voice conversation. Start the microphone
+once, ask follow-up questions, and interrupt or say "stop" to silence a reply while the mic
+stays on. **Stop response** also cancels an answer while it is being generated. The square
+**End voice conversation** button releases the microphone while keeping the current chat
+available for typing or restarting voice. Both the free dashboard and the business assistant
+prefer AssemblyAI's managed Voice Agent API. Set `ASSEMBLYAI_VOICE_AGENT_ENABLED=true` and
+configure `ASSEMBLYAI_API_KEY` in `backend/.env`; no additional dependency or stored agent
+publication is needed.
+
+In managed mode the browser sends 24 kHz PCM audio directly to AssemblyAI, which handles
+turn detection and streamed speech output. Ordinary questions are answered there directly;
+the `use_vera` JSON-Schema tool routes maps, nearby searches, visuals, and screen changes
+through the existing VERA conversation socket. API keys remain on the backend. Tool results
+return only after `reply.done`, and cancelled tool events cannot update the screen. Browser
+speech synthesis is not used for managed replies.
+Free managed turns use 300 ms minimum and 1000 ms maximum silence. These explicit values
+disable provider adaptive endpointing; increase `FREE_VOICE_AGENT_MIN_SILENCE_MS` and
+`FREE_VOICE_AGENT_MAX_SILENCE_MS` if pauses split a sentence before you finish speaking.
+Free capture applies a light noise gate to quiet hum and isolated clicks while continuing to
+stream silence. It keeps a short speech tail and buffered onset to avoid clipping words, and
+disables automatic microphone gain to avoid amplifying room noise. Managed detection uses
+`FREE_VOICE_AGENT_VAD_THRESHOLD=0.65`, a 150 ms interruption confirmation, and
+`FREE_VOICE_AGENT_VOICE_FOCUS=far-field` for laptop microphones; use `near-field` for a headset.
+Very quiet/distant speech may need the microphone closer or a lower VAD threshold.
+
+In the business test panel, grounded answer text appears with the first reply audio chunk.
+The status follows actual playback (Speaking), including audio still queued after the provider
+finishes generation, and clears when playback ends or is interrupted.
+
+Spoken transcripts are synchronized into VERA's chat history. Typing during voice adds the
+message to the managed conversation; typing after ending voice uses the normal VERA pipeline.
+Restarting voice supplies recent chat and screen context. The Stop response button silences
+playback immediately and cancels VERA tool work while microphone capture continues. The provider
+handles spoken interruptions; it may finish generating a locally muted reply. Ending the
+conversation sends `session.end`, releases capture/playback, and leaves typed chat available.
+
+If managed setup fails or is disabled, the dashboard shows **standard mode** and uses the
+existing AssemblyAI Realtime STT / Groq / browser-speech pipeline. Its 100 ms audio packets,
+bounded upload backlog, 8-second startup deadline, and explicit `Terminate` cleanup remain.
+`FREE_VOICE_MIN_TURN_SILENCE_MS` and `FREE_VOICE_MAX_TURN_SILENCE_MS` tune only this fallback.
+`FREE_VOICE_RESPONSE_TIMEOUT_SECONDS` and `FREE_VOICE_VISUAL_TIMEOUT_SECONDS` bound VERA's
+model/tool work in either mode. Backend `[latency]` logs report model/tool time. Managed
+browser `[voice timing] first_audio_ms` measures from the provider's speech-stopped event
+to the first received audio chunk; it excludes the provider's preceding endpointing delay.
+
+To check real provider connectivity, run `.venv\Scripts\python.exe scripts\check_free_managed_voice.py`
+from `backend` with the server running. This opt-in check consumes provider credits, checks
+consecutive replies and a visual tool, and closes its session. It uses text prompts plus
+silent audio, so physical microphone quality and spoken interruption latency still require
+a browser check: ask a question, interrupt with "stop", ask a follow-up, request a diagram,
+then end voice and continue typing.
+For a speech-input check, pass `--speech-dir <directory>` containing three synthetic mono
+PCM16 24 kHz files named `1.wav`, `2.wav`, and `3.wav`: a greeting request, a follow-up,
+and a request to display a diagram. These files are streamed at real-time speed.
+
 ### Backend
 
 ```powershell

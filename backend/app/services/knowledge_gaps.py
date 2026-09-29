@@ -39,6 +39,19 @@ def should_capture(question: str) -> bool:
     return "?" in text or first_word in _QUESTION_STARTERS or len(normalized.split()) >= 3
 
 
+def answer_reports_missing_knowledge(answer: str) -> bool:
+    """Recognize explicit abstentions, including older plain-text answers."""
+    text = (answer or "").lower().replace("\u2019", "'").replace("\u2011", "-")
+    return bool(re.search(
+        r"\b(?:i|we) (?:don't|do not) (?:have|know)\b"
+        r"|\b(?:information|profile|reference(?: data)?|policy|details)\b[^.!?\n]{0,100}"
+        r"\b(?:does not|doesn't|do not|don't) (?:mention|specify|include|cover)\b"
+        r"|\bno\b[^.!?\n]{0,70}\b(?:policy|information|details)\b[^.!?\n]{0,40}"
+        r"\b(?:mentioned|provided|available|listed)\b",
+        text,
+    ))
+
+
 def record_gap(
     db: Session,
     *,

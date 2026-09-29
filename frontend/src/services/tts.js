@@ -5,14 +5,14 @@
 
 let currentUtterance = null;
 
-export function speak(text, { onStart, onEnd } = {}) {
-  if (!window.speechSynthesis || !text) return;
+export function speak(text, { onStart, onEnd, rate = 1.0 } = {}) {
+  if (!window.speechSynthesis || !text) { onEnd?.(); return; }
 
   // Cancel any ongoing speech
   stop();
 
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate = 1.0;
+  utterance.rate = rate;
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
 
@@ -23,12 +23,14 @@ export function speak(text, { onStart, onEnd } = {}) {
   ) || voices.find((v) => v.lang.startsWith('en'));
   if (preferred) utterance.voice = preferred;
 
-  utterance.onstart = () => onStart?.();
+  utterance.onstart = () => { if (currentUtterance === utterance) onStart?.(); };
   utterance.onend = () => {
+    if (currentUtterance !== utterance) return;
     currentUtterance = null;
     onEnd?.();
   };
   utterance.onerror = () => {
+    if (currentUtterance !== utterance) return;
     currentUtterance = null;
     onEnd?.();
   };
@@ -38,10 +40,11 @@ export function speak(text, { onStart, onEnd } = {}) {
 }
 
 export function stop() {
+  // Invalidate callbacks before cancel(), which may synchronously fire onend.
+  currentUtterance = null;
   if (window.speechSynthesis) {
     window.speechSynthesis.cancel();
   }
-  currentUtterance = null;
 }
 
 export function isSpeaking() {

@@ -50,7 +50,11 @@ async def visual_planner_node(state: VERAState) -> dict:
             user_message=state["last_user_message"],
             current_visual=state.get("visual_spec") if is_follow_up else None,
             is_follow_up=is_follow_up,
+            voice_mode=state.get("input_mode") == "voice",
         )
+    except TimeoutError:
+        logger.warning("[node:visual_planner] Visual deadline exceeded; keeping spoken answer")
+        return {"visual_required": False}
     except Exception as exc:
         logger.exception("[node:visual_planner] plan_visual failed: %s", exc)
         # Fail soft — the turn still gets a normal text response.

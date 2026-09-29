@@ -16,7 +16,7 @@ import { CONNECTION_STATUS, AGENT_STATUS } from '../utils/constants';
 export default function Dashboard() {
   const vera = useVERA();
   const { user, logout } = useAuth();
-  const { startVoice, stopSession, sendText, stopSpeaking } = useVoice();
+  const { startVoice, stopVoice, sendText, stopSpeaking, isVoiceActive, isVoiceStarting, voiceMode } = useVoice();
   const navigate = useNavigate();
 
   const [inputText, setInputText] = useState('');
@@ -30,15 +30,15 @@ export default function Dashboard() {
     vera.agentStatus === AGENT_STATUS.PROCESSING ||
     vera.agentStatus === 'processing' ||
     vera.agentStatus === AGENT_STATUS.TOOL_PENDING;
-  const isListening = vera.agentStatus === AGENT_STATUS.LISTENING;
+  const isListening = isVoiceActive && !isVoiceStarting && !isProcessing && !vera.isSpeaking;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [vera.messages, vera.partialTranscript]);
 
   const handleToggleVoice = async () => {
-    if (isConnected || isConnecting) {
-      stopSession();
+    if (isVoiceActive || isVoiceStarting) {
+      stopVoice();
     } else {
       await startVoice();
     }
@@ -66,6 +66,7 @@ export default function Dashboard() {
 
   /* Status helpers */
   const statusLabel = () => {
+    if (isVoiceStarting) return 'Connecting voice…';
     if (isConnecting) return 'Connecting…';
     if (vera.agentStatus === 'processing') return 'Thinking…';
     if (vera.agentStatus === AGENT_STATUS.TOOL_PENDING) return 'Searching…';
@@ -76,6 +77,7 @@ export default function Dashboard() {
   };
 
   const statusColor = () => {
+    if (isVoiceStarting) return '#FFB347';
     if (isConnecting) return '#FFB347';
     if (vera.agentStatus === 'processing' || vera.agentStatus === AGENT_STATUS.TOOL_PENDING) return '#A8B7FF';
     if (vera.isSpeaking) return '#9B8CFF';
@@ -282,13 +284,13 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center gap-2">
-            {vera.isSpeaking && (
+            {(vera.isSpeaking || isProcessing) && (
               <button
                 onClick={stopSpeaking}
                 className="text-xs px-3 py-1.5 rounded-lg transition-all duration-150 font-medium"
                 style={{ background: 'rgba(155,140,255,0.12)', border: '1px solid rgba(155,140,255,0.3)', color: '#9B8CFF' }}
               >
-                Stop Speaking
+                Stop response
               </button>
             )}
           </div>
@@ -415,14 +417,14 @@ export default function Dashboard() {
                 <button
                   id="dashboard-send-btn"
                   onClick={handleSend}
-                  disabled={!inputText.trim() || isProcessing}
+                  disabled={!inputText.trim()}
                   aria-label="Send message"
                   className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 active:scale-95 focus:outline-none"
                   style={{
-                    background: inputText.trim() && !isProcessing ? '#7191FF' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${inputText.trim() && !isProcessing ? 'rgba(113,145,255,0.5)' : 'rgba(180,195,255,0.1)'}`,
-                    color: inputText.trim() && !isProcessing ? '#fff' : '#5A6180',
-                    boxShadow: inputText.trim() && !isProcessing ? '0 0 16px rgba(113,145,255,0.35)' : 'none',
+                    background: inputText.trim() ? '#7191FF' : 'rgba(255,255,255,0.05)',
+                    border: `1px solid ${inputText.trim() ? 'rgba(113,145,255,0.5)' : 'rgba(180,195,255,0.1)'}`,
+                    color: inputText.trim() ? '#fff' : '#5A6180',
+                    boxShadow: inputText.trim() ? '0 0 16px rgba(113,145,255,0.35)' : 'none',
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -435,19 +437,20 @@ export default function Dashboard() {
                 <button
                   id="dashboard-mic-btn"
                   onClick={handleToggleVoice}
-                  disabled={isConnecting}
-                  aria-label={isConnected ? 'Stop voice' : 'Start voice'}
+                  aria-label={isVoiceActive || isVoiceStarting ? 'End voice conversation' : 'Start voice conversation'}
+                  aria-pressed={isVoiceActive || isVoiceStarting}
+                  title={isVoiceActive || isVoiceStarting ? 'End voice conversation' : 'Start voice conversation'}
                   className="shrink-0 w-11 h-11 rounded-2xl flex items-center justify-center transition-all duration-200 active:scale-95 focus:outline-none disabled:opacity-40 disabled:cursor-not-allowed"
                   style={{
-                    background: isListening
+                    background: isVoiceActive || isVoiceStarting
                       ? '#7191FF'
                       : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${isListening ? 'rgba(113,145,255,0.6)' : 'rgba(180,195,255,0.12)'}`,
-                    color: isListening ? '#fff' : '#5A6180',
-                    boxShadow: isListening ? '0 0 20px rgba(113,145,255,0.5)' : 'none',
+                    border: `1px solid ${isVoiceActive || isVoiceStarting ? 'rgba(113,145,255,0.6)' : 'rgba(180,195,255,0.12)'}`,
+                    color: isVoiceActive || isVoiceStarting ? '#fff' : '#5A6180',
+                    boxShadow: isVoiceActive ? '0 0 20px rgba(113,145,255,0.5)' : 'none',
                   }}
                 >
-                  {isListening ? (
+                  {isVoiceActive || isVoiceStarting ? (
                     /* Stop icon */
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                       <rect x="4" y="4" width="16" height="16" rx="2" />
@@ -465,9 +468,9 @@ export default function Dashboard() {
               </div>
 
               {/* Voice listening hint */}
-              {isListening && (
-                <p className="text-xs mt-2 text-center animate-pulse" style={{ color: 'rgba(113,145,255,0.7)' }}>
-                  Listening — speak now
+              {(isVoiceActive || isVoiceStarting) && (
+                <p className="text-xs mt-2 text-center" role="status" style={{ color: 'rgba(113,145,255,0.85)' }}>
+                  {isVoiceStarting ? 'Connecting voice…' : `Voice is on${voiceMode === 'realtime-stt' ? ' (standard mode)' : ''} — interrupt or say “stop”, then keep talking. End voice with the square button.`}
                 </p>
               )}
             </div>

@@ -89,6 +89,8 @@ def _route_after_requirements(state: VERAState) -> str:
     If the user provided an explicit location query, geocode it first.
     Otherwise fall through to the normal confidence-based routing.
     """
+    if state.get("agent_status") == "error":
+        return "generate_response"
     location_query = state.get("location_query")
     has_location = state.get("location") is not None
 

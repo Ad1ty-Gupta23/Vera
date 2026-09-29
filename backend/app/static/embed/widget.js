@@ -530,6 +530,11 @@
   }
 
   function startMicrophone(targetRate, onChunk) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      var unavailable = new Error("Microphone access requires HTTPS or localhost. Serve this demo at http://localhost:5500/novanest.html.");
+      unavailable.microphoneSetup = true;
+      return Promise.reject(unavailable);
+    }
     return navigator.mediaDevices
       .getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } })
       .then(function (stream) {
@@ -538,9 +543,11 @@
         voiceState.audioContext = audioContext;
         var blobUrl = URL.createObjectURL(new Blob([MIC_PROCESSOR_SRC], { type: "application/javascript" }));
         return audioContext.resume().then(function () {
-          return audioContext.audioWorklet.addModule(blobUrl);
+          if (!audioContext.audioWorklet) {
+            throw new Error("This browser cannot load microphone audio processing. Open the demo on localhost or HTTPS in an up-to-date browser.");
+          }
+          return audioContext.audioWorklet.addModule(blobUrl, { credentials: "omit" });
         }).then(function () {
-          URL.revokeObjectURL(blobUrl);
           var source = audioContext.createMediaStreamSource(stream);
           var worklet = new AudioWorkletNode(audioContext, "microphone-processor", {
             processorOptions: { targetSampleRate: targetRate },
@@ -552,8 +559,21 @@
           voiceState.silentGain = gain;
           worklet.port.onmessage = onChunk;
           source.connect(worklet).connect(gain).connect(audioContext.destination);
+        }).finally(function () {
+          URL.revokeObjectURL(blobUrl);
         });
+      }).catch(function (err) {
+        err.microphoneSetup = true;
+        throw err;
       });
+  }
+
+  function microphoneErrorMessage(err) {
+    if (err && err.name === "NotAllowedError") return "Microphone permission denied. Allow microphone access in your browser's site settings. If embedded in an iframe, it must allow microphone access.";
+    if (err && err.name === "NotFoundError") return "No microphone found. Connect a microphone and try again.";
+    if (err && err.name === "NotReadableError") return "The microphone could not be opened. Check your system microphone permissions and whether another app is using it.";
+    if (window.location.protocol === "file:") return "Open this demo through http://localhost:5500/novanest.html instead of opening the HTML file directly, then allow microphone access.";
+    return "Microphone setup failed: " + ((err && err.message) || "Check browser microphone permissions and use HTTPS or localhost.");
   }
 
   function playManagedAudio(base64) {
@@ -780,7 +800,7 @@
           paintMic();
         })
         .catch(function (err) {
-          addError(err && err.name === "NotAllowedError" ? "Microphone permission denied." : "Could not start voice.");
+          addError(microphoneErrorMessage(err));
           stopVoice();
         });
     };
@@ -829,10 +849,10 @@
     api("/public/assistants/" + ASSISTANT_ID + "/voice-agent/session", { cache: "no-store" })
       .then(startManagedVoice)
       .catch(function (err) {
-        var microphoneError = err && (err.name === "NotAllowedError" || err.name === "NotFoundError");
+        var microphoneError = err && (err.microphoneSetup || err.name === "NotAllowedError" || err.name === "NotFoundError");
         stopVoice();
         if (microphoneError) {
-          addError(err.name === "NotAllowedError" ? "Microphone permission denied." : "No microphone found.");
+          addError(microphoneErrorMessage(err));
           return;
         }
         // Feature disabled, provider unavailable, or account not enabled:

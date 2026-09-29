@@ -7,7 +7,18 @@
  * behavior remains authoritative.
  */
 
+import { isStopCommand } from '../utils/voiceCommands';
+
 const OUTPUT_SAMPLE_RATE = 24000;
+// Give incoming chunks a small lead over playback to absorb network jitter.
+// Applied only at startup or after an underrun, never between queued chunks.
+const PLAYBACK_HEADROOM_SECONDS = 0.18;
+// bufferedAmount counts encoded JSON bytes, not raw PCM. Each 50 ms
+// packet contains 2400 PCM bytes -> 3200 base64 bytes plus its JSON envelope.
+const AUDIO_WIRE_BYTES_PER_SECOND = (OUTPUT_SAMPLE_RATE * 2 * 4 / 3) + (20 * 33);
+const UPLOAD_WARNING_BYTES = AUDIO_WIRE_BYTES_PER_SECOND * 2;
+const UPLOAD_MAX_BYTES = AUDIO_WIRE_BYTES_PER_SECOND * 6;
+const UPLOAD_STALL_GRACE_MS = 3000;
 const TOOL_NAME = 'handle_customer_message';
 
 export class VoiceAgentUnavailableError extends Error {
@@ -47,7 +58,7 @@ function normalized(value) {
 
 export function createAssemblyVoiceAgentSession(
   onEvent,
-  { sessionUrl, toolUrl, sessionId, credentials = 'include' },
+  { sessionUrl, toolUrl, sessionId, credentials = 'include', getBootstrap, executeTool, conversationMode = false },
 ) {
   let ws = null;
   let captureContext = null;
@@ -62,12 +73,25 @@ export function createAssemblyVoiceAgentSession(
   let bootstrap = null;
   let greetingPending = true;
   let lastToolResult = null;
+  let businessResultReadyForSpeech = false;
+  let businessResultDisplayed = false;
   let lastTurnEvent = null;
   let providerSessionId = null;
   let interruptionCount = 0;
   let callEndReported = false;
   let suppressReplyAudio = false;
   let latestUserTranscript = '';
+  let generation = 0;
+  let rejectStartup = null;
+  let mutedUntilUser = false;
+  let activeReplyId = null;
+  let replyInProgress = false;
+  let pendingTypedReply = null;
+  let speechEndedAt = null;
+  let firstAudioReceived = false;
+  let userSpeechActive = false;
+  let uploadCongestedAt = null;
+  const cancelledReplies = new Set();
   const playbackSources = new Set();
   const pendingTools = new Map();
   const seenUserItemIds = new Set();
@@ -87,7 +111,7 @@ export function createAssemblyVoiceAgentSession(
   }
 
   function reportCallEnd() {
-    if (!providerSessionId || callEndReported) return;
+    if (!toolUrl || !providerSessionId || callEndReported) return;
     callEndReported = true;
     const endUrl = toolUrl.replace(/\/tool$/, '/calls/end');
     fetch(endUrl, {
@@ -108,6 +132,34 @@ export function createAssemblyVoiceAgentSession(
     });
     playbackSources.clear();
     playbackTime = playbackContext?.currentTime || 0;
+    onEvent({ type: 'voice.playback', active: false });
+  }
+
+  function cancelTools() {
+    pendingTools.forEach((pending) => pending.controller.abort());
+    pendingTools.clear();
+    lastToolResult = null;
+    businessResultReadyForSpeech = false;
+    businessResultDisplayed = false;
+  }
+
+  function interrupt() {
+    pendingTypedReply = null;
+    mutedUntilUser = true;
+    suppressReplyAudio = true;
+    if (activeReplyId) alreadyHandled(cancelledReplies, activeReplyId);
+    cancelTools();
+    stopPlayback();
+  }
+
+  function beginUserSpeech() {
+    if (userSpeechActive) return;
+    userSpeechActive = true;
+    // Keep late audio/tool replies muted until a complete new user turn is
+    // available. The microphone and provider connection stay open throughout.
+    interrupt();
+    onEvent({ type: 'speech.started' });
+    onEvent({ type: 'agent.status', status: 'listening' });
   }
 
   function cleanupAudio() {
@@ -115,7 +167,7 @@ export function createAssemblyVoiceAgentSession(
     workletNode?.disconnect();
     sourceNode?.disconnect();
     silentGain?.disconnect();
-    stream?.getTracks().forEach((track) => track.stop());
+    stream?.getTracks().forEach((track) => { track.onended = null; track.stop(); });
     if (captureContext && captureContext.state !== 'closed') captureContext.close().catch(() => {});
     if (playbackContext && playbackContext.state !== 'closed') playbackContext.close().catch(() => {});
     workletNode = null;
@@ -128,12 +180,17 @@ export function createAssemblyVoiceAgentSession(
 
   function cleanup({ endSession = false } = {}) {
     stopped = true;
+    generation += 1;
     ready = false;
+    uploadCongestedAt = null;
     suppressReplyAudio = false;
-    pendingTools.clear();
+    cancelTools();
+    rejectStartup?.(new DOMException('Voice setup cancelled', 'AbortError'));
+    rejectStartup = null;
     seenUserItemIds.clear();
     seenAgentReplyIds.clear();
     seenToolCallIds.clear();
+    cancelledReplies.clear();
     cleanupAudio();
     if (ws && ws.readyState === WebSocket.OPEN && endSession) {
       try { ws.send(JSON.stringify({ type: 'session.end' })); } catch { /* closing */ }
@@ -144,7 +201,11 @@ export function createAssemblyVoiceAgentSession(
   }
 
   function playPcm16(base64) {
-    if (!playbackContext || stopped || suppressReplyAudio) return;
+    if (!playbackContext || stopped || suppressReplyAudio || mutedUntilUser) return;
+    if (!firstAudioReceived && speechEndedAt !== null) {
+      firstAudioReceived = true;
+      console.info(`[voice timing] first_audio_ms=${Math.round(performance.now() - speechEndedAt)}`);
+    }
     const raw = atob(base64);
     const view = new DataView(new ArrayBuffer(raw.length));
     for (let i = 0; i < raw.length; i += 1) view.setUint8(i, raw.charCodeAt(i));
@@ -156,14 +217,21 @@ export function createAssemblyVoiceAgentSession(
     const source = playbackContext.createBufferSource();
     source.buffer = audioBuffer;
     source.connect(playbackContext.destination);
-    source.onended = () => playbackSources.delete(source);
+    source.onended = () => {
+      playbackSources.delete(source);
+      if (playbackSources.size === 0) onEvent({ type: 'voice.playback', active: false });
+    };
+    if (playbackSources.size === 0) onEvent({ type: 'voice.playback', active: true });
     playbackSources.add(source);
-    playbackTime = Math.max(playbackTime, playbackContext.currentTime);
+    if (playbackTime <= playbackContext.currentTime) {
+      playbackTime = playbackContext.currentTime + PLAYBACK_HEADROOM_SECONDS;
+    }
     source.start(playbackTime);
     playbackTime += audioBuffer.duration;
   }
 
-  async function callVeraTool(call) {
+  async function callVeraTool(call, signal) {
+    if (executeTool) return executeTool(call, { signal, transcript: latestUserTranscript });
     if (call.name !== TOOL_NAME) throw new Error(`Unsupported tool: ${call.name}`);
     // Prefer the verbatim STT result. Tool arguments are generated by the
     // voice model and may paraphrase away words such as "that" or "same"
@@ -175,6 +243,7 @@ export function createAssemblyVoiceAgentSession(
     const res = await fetch(toolUrl, {
       method: 'POST',
       credentials,
+      signal,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         session_id: sessionId,
@@ -183,7 +252,10 @@ export function createAssemblyVoiceAgentSession(
       }),
     });
     const result = await readResponse(res);
+    if (signal.aborted || stopped) throw new DOMException('Tool cancelled', 'AbortError');
     lastToolResult = result;
+    businessResultDisplayed = false;
+    businessResultReadyForSpeech = false;
     if (result.incident) onEvent({ type: 'incident.update', incident: result.incident });
     if (result.ticket) onEvent({ type: 'ticket.update', ticket: result.ticket });
     if (result.order) onEvent({ type: 'order.update', order: result.order });
@@ -192,7 +264,7 @@ export function createAssemblyVoiceAgentSession(
   }
 
   function flushToolResultsIfIdle() {
-    if (lastTurnEvent !== 'reply.done' || !ws || ws.readyState !== WebSocket.OPEN) return;
+    if (mutedUntilUser || stopped || lastTurnEvent !== 'reply.done' || !ws || ws.readyState !== WebSocket.OPEN) return;
     pendingTools.forEach((pending, callId) => {
       if (!pending.ready) return;
       pendingTools.delete(callId);
@@ -204,6 +276,7 @@ export function createAssemblyVoiceAgentSession(
           result: JSON.stringify(outcome.result),
           is_error: false,
         }));
+        if (!conversationMode && lastToolResult === outcome.result) businessResultReadyForSpeech = true;
       } else {
         ws.send(JSON.stringify({
           type: 'tool.result',
@@ -216,15 +289,18 @@ export function createAssemblyVoiceAgentSession(
   }
 
   function queueToolCall(message) {
-    const pending = { ready: false, outcome: null };
+    if (mutedUntilUser) return;
+    const pending = { ready: false, outcome: null, controller: new AbortController() };
     pendingTools.set(message.call_id, pending);
-    callVeraTool(message).then(
+    callVeraTool(message, pending.controller.signal).then(
       (result) => {
+        if (pending.controller.signal.aborted || stopped) return;
         pending.ready = true;
         pending.outcome = { ok: true, result };
         flushToolResultsIfIdle();
       },
       (error) => {
+        if (pending.controller.signal.aborted || stopped) return;
         pending.ready = true;
         pending.outcome = { ok: false, error: error.message || 'Tool call failed' };
         flushToolResultsIfIdle();
@@ -244,18 +320,16 @@ export function createAssemblyVoiceAgentSession(
         break;
       case 'input.speech.started':
         lastTurnEvent = message.type;
-        // Stop already-buffered reply audio immediately. Waiting only for the
-        // semantic reply.done(interrupted) signal can leave audible backlog.
-        // Keep suppressing late chunks from that reply until AssemblyAI starts
-        // the next response; otherwise those chunks recreate the backlog.
-        suppressReplyAudio = true;
-        stopPlayback();
-        onEvent({ type: 'agent.status', status: 'listening' });
+        beginUserSpeech();
         break;
       case 'input.speech.stopped':
+        speechEndedAt = performance.now();
+        firstAudioReceived = false;
         onEvent({ type: 'agent.status', status: 'processing' });
         break;
       case 'transcript.user.delta':
+        // Some provider turns deliver text before a speech-start notification.
+        if (message.text?.trim()) beginUserSpeech();
         onEvent({ type: 'transcript.partial', text: message.text || '' });
         break;
       case 'transcript.user':
@@ -264,6 +338,13 @@ export function createAssemblyVoiceAgentSession(
         // twice or let it become input for another tool call.
         if (alreadyHandled(seenUserItemIds, message.item_id)) break;
         latestUserTranscript = message.text || '';
+        if (!latestUserTranscript.trim()) break;
+        beginUserSpeech();
+        userSpeechActive = false;
+        if (isStopCommand(latestUserTranscript)) {
+          interrupt();
+          onEvent({ type: 'agent.status', status: 'listening' });
+        } else mutedUntilUser = false;
         onEvent({
           type: 'transcript.final',
           text: message.text || '',
@@ -271,16 +352,25 @@ export function createAssemblyVoiceAgentSession(
         });
         break;
       case 'reply.started':
+        if (cancelledReplies.has(message.reply_id)) break;
         lastTurnEvent = message.type;
-        suppressReplyAudio = false;
-        onEvent({ type: 'agent.status', status: 'processing' });
+        replyInProgress = true;
+        activeReplyId = message.reply_id || null;
+        suppressReplyAudio = mutedUntilUser;
+        if (!mutedUntilUser) onEvent({ type: 'agent.status', status: 'processing' });
         break;
       case 'reply.audio':
-        playPcm16(message.data);
+        if (!cancelledReplies.has(message.reply_id || activeReplyId)) {
+          if (!conversationMode && !suppressReplyAudio && !mutedUntilUser && businessResultReadyForSpeech) {
+            showBusinessAnswer(activeReplyId);
+          }
+          playPcm16(message.data);
+        }
         break;
       case 'tool.call':
         // Start the HTTP work now for low latency, but send tool.result only
         // after the matching function-call reply.done, per AssemblyAI's API.
+        if (suppressReplyAudio || cancelledReplies.has(message.reply_id || activeReplyId)) break;
         if (!message.call_id) {
           onEvent({ type: 'error', message: 'Voice tool call was missing an ID.' });
         } else if (!alreadyHandled(seenToolCallIds, message.call_id)) {
@@ -290,6 +380,13 @@ export function createAssemblyVoiceAgentSession(
       case 'transcript.agent': {
         const agentReplyId = message.reply_id || message.item_id;
         if (alreadyHandled(seenAgentReplyIds, agentReplyId)) break;
+        if (mutedUntilUser || suppressReplyAudio || cancelledReplies.has(agentReplyId || activeReplyId)) break;
+        if (conversationMode) {
+          if (message.text && !mutedUntilUser && !suppressReplyAudio && !cancelledReplies.has(agentReplyId)) {
+            onEvent({ type: 'agent.response', text: message.text, audioManaged: true, eventId: agentReplyId });
+          }
+          break;
+        }
         const isGreeting = greetingPending
           && normalized(message.text) === normalized(bootstrap?.session?.greeting);
         greetingPending = false;
@@ -299,36 +396,42 @@ export function createAssemblyVoiceAgentSession(
         // message.text as a fallback creates a ghost bubble that was not the
         // final business response the customer heard.
         if (!isGreeting && message.text && lastToolResult) {
-          onEvent({
-            type: 'agent.response',
-            // Keep the exact structured answer (including clickable URLs) in
-            // chat while AssemblyAI speaks the natural spoken_answer form.
-            text: lastToolResult.answer,
-            grounded: lastToolResult.grounded,
-            sources: lastToolResult.sources || [],
-            audioManaged: true,
-            eventId: agentReplyId || null,
-          });
+          showBusinessAnswer(agentReplyId);
           lastToolResult = null;
+          businessResultReadyForSpeech = false;
         }
         if (message.interrupted) onEvent({ type: 'agent.interrupted' });
         break;
       }
       case 'reply.done': {
+        if (message.reply_id && activeReplyId && message.reply_id !== activeReplyId) break;
         lastTurnEvent = message.type;
+        replyInProgress = false;
         if (message.status === 'interrupted') {
           interruptionCount += 1;
           suppressReplyAudio = true;
           stopPlayback();
-          pendingTools.clear();
+          cancelTools();
           onEvent({ type: 'agent.interrupted' });
           onEvent({ type: 'agent.status', status: 'listening' });
         } else {
           flushToolResultsIfIdle();
           onEvent({ type: 'agent.status', status: 'listening' });
         }
+        if (pendingTypedReply) {
+          const text = pendingTypedReply;
+          pendingTypedReply = null;
+          mutedUntilUser = false;
+          requestTypedReply(text);
+        }
         break;
       }
+      case 'session.ended':
+        if (!stopped) {
+          cleanup();
+          onEvent({ type: conversationMode ? 'voice.status' : 'error', status: 'unavailable', message: 'Voice session ended. Start voice again to continue.' });
+        }
+        break;
       case 'session.error':
         onEvent({ type: 'error', message: message.message || 'Managed voice session error.' });
         break;
@@ -337,17 +440,41 @@ export function createAssemblyVoiceAgentSession(
     }
   }
 
-  async function startAudio() {
-    stream = await navigator.mediaDevices.getUserMedia({
-      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true },
+  function showBusinessAnswer(replyId) {
+    if (!lastToolResult || businessResultDisplayed) return;
+    businessResultDisplayed = true;
+    // The tool's complete, grounded text is available before TTS finishes.
+    // Display it at the first audio chunk, preserving sources and links.
+    onEvent({
+      type: 'agent.response', text: lastToolResult.answer,
+      grounded: lastToolResult.grounded, sources: lastToolResult.sources || [],
+      audioManaged: true, eventId: replyId || null,
     });
+  }
+
+  async function startAudio(attempt) {
+    const captured = await navigator.mediaDevices.getUserMedia({
+      // Managed free sessions already use the provider's Voice Focus; avoid
+      // stacking browser noise removal over it while retaining echo cancellation.
+      audio: { channelCount: 1, echoCancellation: true, noiseSuppression: !conversationMode, autoGainControl: !conversationMode },
+    });
+    if (stopped || attempt !== generation) {
+      captured.getTracks().forEach((track) => track.stop());
+      throw new DOMException('Voice setup cancelled', 'AbortError');
+    }
+    stream = captured;
     captureContext = new AudioContext();
     playbackContext = new AudioContext();
+    const capture = captureContext;
     await Promise.all([captureContext.resume(), playbackContext.resume()]);
-    await captureContext.audioWorklet.addModule('/voiceAgentProcessor.js?v=barge-in-2');
+    if (stopped || attempt !== generation) throw new DOMException('Voice setup cancelled', 'AbortError');
+    await capture.audioWorklet.addModule('/voiceAgentProcessor.js?v=barge-in-2');
+    if (stopped || attempt !== generation) throw new DOMException('Voice setup cancelled', 'AbortError');
     sourceNode = captureContext.createMediaStreamSource(stream);
     workletNode = new AudioWorkletNode(captureContext, 'voice-agent-processor', {
-      processorOptions: { targetSampleRate: OUTPUT_SAMPLE_RATE },
+      // Volume alone cannot distinguish speech from speaker echo or room
+      // noise. Provider speech events/transcripts remain the barge-in signal.
+      processorOptions: { targetSampleRate: OUTPUT_SAMPLE_RATE, noiseGate: conversationMode, detectSpeech: false },
     });
     // A zero-gain connection keeps worklet processing alive without feeding
     // microphone audio back through the speakers.
@@ -355,18 +482,43 @@ export function createAssemblyVoiceAgentSession(
     silentGain.gain.value = 0;
     sourceNode.connect(workletNode).connect(silentGain).connect(captureContext.destination);
     workletNode.port.onmessage = (event) => {
-      if (ready && ws?.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'input.audio', audio: arrayBufferToBase64(event.data) }));
+      if (!stopped && ready && ws?.readyState === WebSocket.OPEN) {
+        if (event.data?.type === 'speech.activity') {
+          return;
+        }
+        const packet = JSON.stringify({ type: 'input.audio', audio: arrayBufferToBase64(event.data) });
+        const queuedBytes = ws.bufferedAmount + packet.length;
+        const now = performance.now();
+        if (queuedBytes > UPLOAD_WARNING_BYTES) {
+          uploadCongestedAt ??= now;
+        } else {
+          uploadCongestedAt = null;
+        }
+        if (queuedBytes > UPLOAD_MAX_BYTES
+          || (uploadCongestedAt !== null && now - uploadCongestedAt >= UPLOAD_STALL_GRACE_MS)) {
+          cleanup({ endSession: true });
+          onEvent({ type: conversationMode ? 'voice.status' : 'error', status: 'unavailable', message: 'Voice stopped because the audio upload stayed congested. Check your connection, then start voice again.' });
+          return;
+        }
+        ws.send(packet);
       }
     };
+    captured.getTracks().forEach((track) => {
+      track.onended = () => {
+        cleanup({ endSession: true });
+        onEvent({ type: 'microphone.error', message: 'Microphone disconnected. Reconnect it and start voice again.' });
+      };
+    });
   }
 
   async function start() {
     stopped = false;
+    const attempt = ++generation;
     try {
-      const res = await fetch(sessionUrl, { credentials, cache: 'no-store' });
-      bootstrap = await readResponse(res);
-      await startAudio();
+      bootstrap = getBootstrap ? await getBootstrap()
+        : await readResponse(await fetch(sessionUrl, { credentials, cache: 'no-store' }));
+      if (stopped || attempt !== generation) throw new DOMException('Voice setup cancelled', 'AbortError');
+      await startAudio(attempt);
 
       const wsUrl = new URL(bootstrap.websocket_url);
       wsUrl.searchParams.set('token', bootstrap.token);
@@ -374,14 +526,22 @@ export function createAssemblyVoiceAgentSession(
 
       await new Promise((resolve, reject) => {
         let settled = false;
+        rejectStartup = (error) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          reject(error);
+        };
         const timeout = window.setTimeout(() => {
-          if (!settled) reject(new VoiceAgentUnavailableError('Managed voice timed out'));
+          rejectStartup?.(new VoiceAgentUnavailableError('Managed voice timed out'));
         }, 12000);
 
         ws.onopen = () => {
+          if (stopped || attempt !== generation) return;
           ws.send(JSON.stringify({ type: 'session.update', session: bootstrap.session }));
         };
         ws.onmessage = (event) => {
+          if (stopped || attempt !== generation) return;
           let message;
           try { message = JSON.parse(event.data); } catch { return; }
           if (message.type === 'session.error' && !settled) {
@@ -412,14 +572,14 @@ export function createAssemblyVoiceAgentSession(
             window.clearTimeout(timeout);
             reject(new VoiceAgentUnavailableError('Managed voice closed during setup'));
           } else if (!stopped) {
-            onEvent({ type: 'error', message: 'Managed voice connection closed.' });
             reportCallEnd();
             cleanup();
+            onEvent({ type: conversationMode ? 'voice.status' : 'error', status: 'unavailable', message: 'Managed voice connection closed. Start voice again to reconnect.' });
           }
         };
       });
     } catch (error) {
-      cleanup();
+      cleanup({ endSession: true });
       throw error;
     }
   }
@@ -428,5 +588,28 @@ export function createAssemblyVoiceAgentSession(
     cleanup({ endSession: true });
   }
 
-  return { start, stop, mode: 'assemblyai-managed' };
+  function sendText(text) {
+    if (!ready || !ws || ws.readyState !== WebSocket.OPEN) throw new Error('Voice session is not ready');
+    interrupt();
+    userSpeechActive = false;
+    latestUserTranscript = text;
+    ws.send(JSON.stringify({ type: 'conversation.message', role: 'user', content: text }));
+    speechEndedAt = performance.now();
+    firstAudioReceived = false;
+    if (replyInProgress) pendingTypedReply = text;
+    else {
+      mutedUntilUser = false;
+      requestTypedReply(text);
+    }
+  }
+
+  function requestTypedReply(text) {
+    // Supply the triggering text explicitly: the context injection and reply
+    // request can otherwise be processed on different provider worker queues.
+    ws.send(JSON.stringify({ type: 'reply.create', instructions:
+      `Respond to this latest typed user message, using your conversation context and tools when needed: ${JSON.stringify(text)}` }));
+  }
+
+  return { start, stop, interrupt, sendText, mode: 'assemblyai-managed',
+    get microphoneActive() { return Boolean(stream); }, get ready() { return ready; } };
 }

@@ -11,13 +11,17 @@
  * We buffer several render quanta together and only post once we have a
  * safely-sized chunk.
  */
+import { VoiceNoiseGate } from './voiceNoiseGate.js';
+
 class MicrophoneProcessor extends AudioWorkletProcessor {
-  constructor() {
+  constructor(options = {}) {
     super();
-    // ~100ms per chunk — comfortably inside AssemblyAI's 50-1000ms window.
-    this._chunkSamples = Math.round(sampleRate * 0.1);
+    // 100ms keeps live audio responsive without flooding the network with
+    // minimum-size frames. The backend coalesces queued packets when needed.
+    this._chunkSamples = Math.ceil(sampleRate * 0.1);
     this._buffer = new Int16Array(this._chunkSamples);
     this._offset = 0;
+    this._noiseGate = options.processorOptions?.noiseGate ? new VoiceNoiseGate(100) : null;
   }
 
   process(inputs) {
@@ -29,7 +33,8 @@ class MicrophoneProcessor extends AudioWorkletProcessor {
       this._buffer[this._offset++] = s < 0 ? s * 0x8000 : s * 0x7fff;
 
       if (this._offset >= this._chunkSamples) {
-        this.port.postMessage(this._buffer.buffer, [this._buffer.buffer]);
+        const output = this._noiseGate ? this._noiseGate.filter(this._buffer) : this._buffer;
+        this.port.postMessage(output.buffer, [output.buffer]);
         this._buffer = new Int16Array(this._chunkSamples);
         this._offset = 0;
       }

@@ -1,4 +1,6 @@
+import asyncio
 import json
+from urllib.parse import urlencode
 import websockets
 from websockets.connection import State
 from app.config.settings import settings
@@ -9,12 +11,21 @@ ASSEMBLYAI_RT_URL = "wss://streaming.assemblyai.com/v3/ws"
 SAMPLE_RATE = 16000
 
 
-async def connect_assemblyai():
+async def connect_assemblyai(*, conversational: bool = False):
     """Open an authenticated AssemblyAI Universal-Streaming (v3) WebSocket."""
     if not settings.assemblyai_api_key:
         raise RuntimeError("ASSEMBLYAI_API_KEY is not configured")
 
-    url = f"{ASSEMBLYAI_RT_URL}?sample_rate={SAMPLE_RATE}&format_turns=true"
+    params = {"sample_rate": SAMPLE_RATE, "format_turns": "true"}
+    if conversational:
+        params.update({
+            "mode": "min_latency",
+            "interruption_delay": 0,
+            "format_turns": "false",
+            "min_turn_silence": settings.free_voice_min_turn_silence_ms,
+            "max_turn_silence": settings.free_voice_max_turn_silence_ms,
+        })
+    url = f"{ASSEMBLYAI_RT_URL}?{urlencode(params)}"
     headers = {"Authorization": settings.assemblyai_api_key}
     ws = await websockets.connect(url, additional_headers=headers)
     return ws
@@ -22,6 +33,24 @@ async def connect_assemblyai():
 
 def is_open(ws) -> bool:
     return ws.state == State.OPEN
+
+
+async def close_assemblyai(ws) -> None:
+    """Explicitly end a live speech session, even if its transport is stalled.
+
+    Call after stopping transcription processing: a user ending voice should
+    not launch another answer from the final turn emitted by Terminate.
+    """
+    try:
+        if is_open(ws):
+            await asyncio.wait_for(ws.send(json.dumps({"type": "Terminate"})), timeout=0.2)
+    except Exception:
+        pass  # Still close the transport if the termination frame cannot send.
+    finally:
+        try:
+            await asyncio.wait_for(ws.close(), timeout=2)
+        except Exception:
+            pass
 
 
 def parse_assemblyai_event(raw: str) -> dict | None:
@@ -54,9 +83,8 @@ def parse_assemblyai_event(raw: str) -> dict | None:
             "turn_id": msg.get("turn_order"),
         }
 
-    # v3 sends "SpeechStarted" the instant it detects the user has begun
-    # talking — this fires *before* any Turn text arrives, which makes it the
-    # earliest possible signal for barge-in / interruption handling.
+    # SpeechStarted precedes the first transcript on supporting models. It is
+    # provider-timed (not immediate local VAD); partials also support barge-in.
     if msg_type == "SpeechStarted":
         return {"type": "speech.started"}
 

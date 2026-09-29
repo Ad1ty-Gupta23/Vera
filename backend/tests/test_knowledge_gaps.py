@@ -77,8 +77,8 @@ class KnowledgeGapTests(unittest.TestCase):
             )
 
         # The established response path still runs; gap capture is additive.
-        self.assertTrue(first["grounded"])
-        self.assertTrue(second["grounded"])
+        self.assertFalse(first["grounded"])
+        self.assertFalse(second["grounded"])
         self.assertIn("don't have that information", first["answer"])
         self.assertEqual(get_client.return_value.chat.completions.create.call_count, 2)
         gaps = self.db.query(KnowledgeGap).all()
@@ -92,6 +92,67 @@ class KnowledgeGapTests(unittest.TestCase):
         self.assertFalse(
             business_chat._profile_can_answer(business_row, "Do you ship internationally?")
         )
+
+    def test_related_chunks_do_not_hide_unanswered_questions(self):
+        business_row = self.make_business()
+        replies = [
+            "I don\u2019t have information about a student discount for NovaNest.",
+            "The available information does not specify whether we offer gift wrapping.",
+            '{"answer":"Please contact us about installation; it is not verified.","knowledge_missing":true}',
+        ]
+        questions = ["Do you offer student discounts?", "Do you offer gift wrapping?", "Do you offer installation?"]
+        with (
+            patch.object(business_chat.issue_workflow, "maybe_handle_turn", return_value=None),
+            patch.object(business_chat.vector_store, "query", return_value=[{
+                "text": "Returns within 30 days", "distance": 0.1, "filename": "policy.txt",
+            }]),
+            patch.object(business_chat, "get_client") as client,
+        ):
+            for index, (question, answer) in enumerate(zip(questions, replies)):
+                client.return_value.chat.completions.create.return_value.choices[0].message.content = answer
+                result = asyncio.run(business_chat.send_message(
+                    self.db, business_row, f"widget:unknown-{index}", question, channel="voice",
+                ))
+                self.assertFalse(result["grounded"])
+                self.assertFalse(result["answer"].startswith('Answer:\n{'))
+        self.assertEqual(self.db.query(KnowledgeGap).count(), 3)
+
+    def test_supported_json_answer_does_not_create_gap(self):
+        business_row = self.make_business()
+        with (
+            patch.object(business_chat.issue_workflow, "maybe_handle_turn", return_value=None),
+            patch.object(business_chat.vector_store, "query", return_value=[]),
+            patch.object(business_chat, "get_client") as client,
+        ):
+            client.return_value.chat.completions.create.return_value.choices[0].message.content = (
+                '{"answer":"We are open Monday to Saturday, 9 AM to 7 PM.","knowledge_missing":false}'
+            )
+            result = asyncio.run(business_chat.send_message(
+                self.db, business_row, "widget:hours", "When are you open?",
+            ))
+        self.assertTrue(result["grounded"])
+        self.assertEqual(self.db.query(KnowledgeGap).count(), 0)
+
+    def test_recovery_is_tenant_scoped_idempotent_and_preserves_dismissals(self):
+        from scripts.recover_knowledge_gaps import recover
+        from app.models.conversation import Conversation, ConversationMessage
+        business_row = self.make_business()
+        thread = Conversation(business_id=business_row.id, session_id="widget:recovery")
+        self.db.add(thread)
+        self.db.flush()
+        for question in ("Do you offer student discounts?", "Do you gift wrap?"):
+            self.db.add(ConversationMessage(conversation_id=thread.id, role="customer", content=question))
+            self.db.add(ConversationMessage(conversation_id=thread.id, role="assistant", content="I don't have that information."))
+        gap = knowledge_gaps.record_gap(self.db, business_id=business_row.id,
+            conversation_id=thread.id, question="Do you gift wrap?")
+        gap.status = KnowledgeGap.STATUS_DISMISSED
+        self.db.commit()
+        self.assertEqual(recover(self.db, 9999), [])
+        self.assertEqual(len(recover(self.db, business_row.id)), 1)
+        self.assertEqual(self.db.query(KnowledgeGap).count(), 1)
+        self.assertEqual(len(recover(self.db, business_row.id, apply=True)), 1)
+        self.assertEqual(recover(self.db, business_row.id, apply=True), [])
+        self.assertEqual(gap.status, KnowledgeGap.STATUS_DISMISSED)
 
     def test_business_chat_retrieval_and_model_run_off_event_loop(self):
         business_row = self.make_business()

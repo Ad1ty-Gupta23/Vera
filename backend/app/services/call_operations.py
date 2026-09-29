@@ -55,6 +55,8 @@ def wants_human(message: str) -> bool:
 
 def resolution_feedback(message: str) -> Optional[bool]:
     normalized = _normalize(message)
+    if re.search(r"\b(confirm|create|submit|send|raise|file)\b", normalized):
+        return None
     if normalized in _NEGATIVE_FEEDBACK:
         return False
     if normalized in _POSITIVE_FEEDBACK:

@@ -56,6 +56,9 @@ _ALLOWED_TRANSITIONS = {
 _CONFIRM_TICKET_PHRASES = {
     "yes",
     "yes create it",
+    "yes i confirm",
+    "i confirm",
+    "yes confirm",
     "create it",
     "create ticket",
     "create the ticket",

@@ -1,15 +1,17 @@
+import asyncio
 import json
 import logging
+from time import perf_counter
 
 from app.agent.visual_schemas import VisualDecision
 from app.agent.visual_prompts import (
     VISUAL_PLANNER_SYSTEM_PROMPT,
     build_visual_planner_user_prompt,
 )
-from app.services.groq import get_client  # reuse the existing Groq client/singleton
+from app.services.groq import get_async_client
 from app.config.settings import settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("uvicorn.error.vera.visual")
 
 
 def _repair_visual_shape(visual: dict) -> dict:
@@ -96,16 +98,26 @@ async def plan_visual(
     user_message: str,
     current_visual: dict | None,
     is_follow_up: bool,
+    *,
+    voice_mode: bool = False,
 ) -> VisualDecision:
     """
     Ask the LLM whether a visual is warranted for this turn and, if so,
     what it should contain. Mirrors classify_intent's call shape so it
     plugs into the same Groq client/settings/error-handling conventions.
     """
-    client = get_client()
+    client = get_async_client()
 
+    prompt = VISUAL_PLANNER_SYSTEM_PROMPT
+    if voice_mode:
+        prompt += (
+            "\n\nThis is a live voice conversation. Keep narration and explanation "
+            "to about 60 words total unless the user requests detail. Avoid "
+            "repeating the narration in the explanation. Preserve the visual "
+            "specification and any requested edits."
+        )
     messages = [
-        {"role": "system", "content": VISUAL_PLANNER_SYSTEM_PROMPT},
+        {"role": "system", "content": prompt},
         {
             "role": "user",
             "content": build_visual_planner_user_prompt(
@@ -114,16 +126,19 @@ async def plan_visual(
         },
     ]
 
-    response = client.chat.completions.create(
+    started = perf_counter()
+    response = await asyncio.wait_for(client.chat.completions.create(
         model=settings.groq_model,
         messages=messages,
         temperature=0.2,
         reasoning_effort="low",
         max_tokens=4096,
         response_format={"type": "json_object"},
-    )
+    ), timeout=settings.free_voice_visual_timeout_seconds if voice_mode else 25.0)
 
     raw = response.choices[0].message.content
     decision = _parse_visual_decision(raw)
+    logger.info("[latency] stage=visual mode=%s duration_ms=%.0f",
+                "voice" if voice_mode else "text", (perf_counter() - started) * 1000)
     logger.debug("[visual_planning] decision=%s", decision.model_dump())
     return decision
